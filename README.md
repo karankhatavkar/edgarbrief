@@ -2,8 +2,6 @@
 
 An internal AI chatbot that lets analysts query a corpus of documents in plain English and get sourced, citable answers.
 
-Built live on YouTube as part of the [**Build a Complete**](https://youtube.com/@daveebbelaar) series — episode 1.
-
 ## The client
 
 **Driftwood Capital** — fictional independent investment research firm. Their analysts spend half their week reading 10-Ks and 10-Qs before they can produce any original analysis. Document Copilot eats that intake work so they can skip straight to insight.
