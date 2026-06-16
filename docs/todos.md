@@ -39,20 +39,29 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
   - [x] HNSW index (vector) + GIN index (full-text)
   - [x] RLS policies (users see only their own chats)
 - [x] `uv run alembic upgrade head` against Supabase direct connection
-- [x] `app/database/supabase.py` — user-scoped and service-role clients
+- [ ] `app/database/supabase.py` — user-scoped and service-role clients
 - [x] Verify: `uv run uvicorn app.main:app --reload` → health check returns 200
 
 ---
 
-## Phase 2 — Auth & Supabase integration
+## Phase 2 — Auth (full stack)
 
-**Goal:** FastAPI can verify Supabase JWTs and return the authenticated user.
+Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
-- [ ] Create `backend/app/auth/dependencies.py`:
-  - `get_current_user(authorization: str = Header(...))` — extract Bearer token, call Supabase `auth.get_user(token)`, raise `401` on failure, return typed `AuthUser(id, email)`
-- [ ] Create `backend/app/api/auth.py` — GET `/me` endpoint using `get_current_user`, returns `{id, email}`; add router to `main.py`
-- [ ] Manual test: sign up a user in Supabase dashboard, obtain JWT, hit `GET /me` with `Authorization: Bearer <token>`
-- [ ] Write `backend/tests/auth/test_dependencies.py` — unit test `get_current_user` with mocked Supabase response
+**Backend**
+
+- [ ] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
+- [ ] Reject missing/expired tokens with `401` before any chat or retrieval work
+
+**Frontend**
+
+- [ ] Scaffold Vite + React + TypeScript + Tailwind + shadcn ([frontend-setup](guides/frontend-setup.md))
+- [ ] `src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- [ ] `src/lib/supabase.ts` — browser Supabase client
+- [ ] `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
+- [ ] Sign-in / sign-up pages (email only, no SSO)
+- [ ] Protected routes — redirect unauthenticated users to login
+- [ ] Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
 
 ---
 
