@@ -1,12 +1,12 @@
-# Document Copilot
+# EdgarBrief
 
-An internal AI chatbot that lets analysts query a corpus of documents in plain English and get sourced, citable answers.
+An AI assistant that lets equity research analysts query a corpus of SEC filings in plain English and get sourced, citable answers.
 
-## The client
+## The problem
 
-**Driftwood Capital** — fictional independent investment research firm. Their analysts spend half their week reading 10-Ks and 10-Qs before they can produce any original analysis. Document Copilot eats that intake work so they can skip straight to insight.
+Analysts at independent equity research boutiques spend roughly half their week doing document intake — reading 10-Ks and 10-Qs before they can produce any original analysis. EdgarBrief eliminates that bottleneck so analysts can skip straight to insight.
 
-Full brief: [docs/client-brief.md](docs/client-brief.md)
+Full brief: [docs/brief.md](docs/brief.md)
 
 ## Stack
 
@@ -19,17 +19,17 @@ Full brief: [docs/client-brief.md](docs/client-brief.md)
 | Retrieval          | Supabase `pgvector` + Postgres full-text search      |
 | Auth               | Supabase Auth (email only)                           |
 | Hosting            | Railway                                              |
-| LLM + embeddings   | OpenAI                                               |
+| LLM + embeddings   | Google Gemini                                        |
 
 ## Repo layout
 
 ```text
 document-copilot/
-├── AGENTS.md           # agent instructions (read first)
+├── CLAUDE.md           # agent instructions (read first)
 ├── README.md           # this file
 ├── data/               # local corpus + download script (payloads gitignored)
 ├── docs/
-│   └── client-brief.md # the client one-pager
+│   └── brief.md        # problem statement
 ├── backend/            # FastAPI service
 └── frontend/           # React SPA (Vite)
 ```
@@ -45,7 +45,7 @@ Install these before setting up `backend/` or `frontend/`:
 | [Node.js](https://nodejs.org/) | 20+ (LTS) | Frontend toolchain | nodejs.org or `nvm install --lts` |
 | [pnpm](https://pnpm.io/installation) | latest | Frontend package manager | `corepack enable && corepack prepare pnpm@latest --activate` |
 
-You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create an [OpenAI API key](https://platform.openai.com/api-keys) when the LLM layer is wired up.
+You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create a [Gemini API key](https://aistudio.google.com/app/apikey) when the LLM layer is wired up.
 
 ## Running locally
 

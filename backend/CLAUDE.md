@@ -1,6 +1,6 @@
 # Backend — agent notes
 
-This is the FastAPI service for Document Copilot. Read [../AGENTS.md](../AGENTS.md) first — universal building rules live there. This file adds backend-specific conventions.
+This is the FastAPI service for EdgarBrief. Read [../CLAUDE.md](../CLAUDE.md) first — universal building rules live there. This file adds backend-specific conventions.
 
 ## Stack
 
@@ -11,14 +11,14 @@ This is the FastAPI service for Document Copilot. Read [../AGENTS.md](../AGENTS.
 - `pytest` for tests
 - Supabase Python client (DB + auth)
 - SQLAlchemy models + Alembic migrations for database schema changes
-- OpenAI SDK for LLM & embeddings
+- Google Gemini SDK (`google-genai`) for LLM & embeddings
 - Supabase `pgvector` for semantic search and Postgres full-text search for keyword retrieval. Hybrid search should run vector and full-text queries separately, then fuse ranked results in Python with Reciprocal Rank Fusion.
 - `structlog` for logging
 - `uv` for dependency + project management
 
 ## Dependency policy
 
-See universal policy in [../AGENTS.md](../AGENTS.md). Backend-specific:
+See universal policy in [../CLAUDE.md](../CLAUDE.md). Backend-specific:
 
 - **Prefer stdlib:** `pathlib`, `datetime`, `uuid`, `enum`, `dataclasses`, `asyncio`, `collections`, `itertools`, `json`, `urllib`.
 - **Not OK without justification:** `python-dateutil`, `toolz`, `funcy`, `more-itertools`, small JSON/string micro-libs, "ergonomic" wrappers on top of declared SDKs.
@@ -73,7 +73,7 @@ backend/
 
 - **Prefer unit over integration.** Mock at the service boundary.
 - Fast suite (`pytest -m "not integration"`) must stay green and hit no network / no DB.
-- Integration tests go behind `@pytest.mark.integration` and may require live OpenAI / Supabase credentials.
+- Integration tests go behind `@pytest.mark.integration` and may require live Gemini / Supabase credentials.
 - Tests live next to what they test (`retrieval/retriever.py` → `tests/retrieval/test_retriever.py`).
 - Required test coverage: ingestion logic, retrieval, citation extraction, grounding enforcement.
 
