@@ -18,73 +18,36 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 1 — Backend scaffold
+## Phase 1 — Backend scaffold & database
 
-**Goal:** runnable FastAPI app with config, CORS, and directory structure in place.
+**Goal:** a running FastAPI service with a migrated Supabase schema.
 
-- [ ] Add backend runtime deps to `backend/pyproject.toml`:
-  - `fastapi`, `uvicorn[standard]`
-  - `pydantic-settings`
-  - `supabase`
-  - `google-genai`
-  - `pydantic-ai[gemini]`
-  - `sqlalchemy`, `alembic`
-  - `structlog`
-  - `httpx`
-- [ ] Add dev deps: `pytest`, `pytest-asyncio`, `ruff`
-- [ ] Update `backend/.env.example`: replace `OPENAI_API_KEY` / `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_DIMENSIONS` with `GEMINI_API_KEY`, `GEMINI_EMBEDDING_MODEL=text-embedding-004`, `GEMINI_EMBEDDING_DIMENSIONS=768`
-- [ ] Create directory skeleton:
-  ```
-  backend/app/
-  ├── api/
-  ├── auth/
-  ├── chat/
-  ├── assistant/
-  ├── retrieval/
-  ├── grounding/
-  ├── database/
-  └── prompts/
-  backend/ingest/
-  backend/tests/
-  ```
-- [ ] Create `backend/app/config.py` — pydantic-settings `Settings` class reading from env; fields: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_EMBEDDING_MODEL`, `GEMINI_EMBEDDING_DIMENSIONS`, `ALLOWED_ORIGINS`; fail fast on missing required vars
-- [ ] Create `backend/app/main.py` — FastAPI app, CORS middleware using `settings.ALLOWED_ORIGINS`, health-check GET `/health`, include routers (empty for now)
-- [ ] Confirm `uv run uvicorn app.main:app --reload` starts and `/health` returns 200
+- [x] Init backend deps and project layout ([backend-setup](#appendix--quick-reference))
+- [x] `app/config.py` — settings module, fail fast on missing env vars
+- [x] `app/main.py` — FastAPI app, CORS, health check (`GET /health`)
+- [x] SQLAlchemy models in `app/database/models.py`:
+  - [x] `users`
+  - [x] `source_documents`
+  - [x] `document_chunks` (embedding + generated `tsvector`)
+  - [x] `chat_threads`
+  - [x] `chat_messages`
+  - [x] `message_citations`
+- [ ] Alembic init + first migration:
+  - [ ] `create extension if not exists vector`
+  - [ ] `vector(768)` embedding column
+  - [ ] generated `tsvector` column on chunks
+  - [ ] HNSW index (vector) + GIN index (full-text)
+  - [ ] RLS policies (users see only their own chats)
+- [ ] `uv run alembic upgrade head` against Supabase direct connection
+- [ ] `app/database/supabase.py` — user-scoped and service-role clients
+- [ ] Verify: `uv run uvicorn app.main:app --reload` → health check returns 200
 
 ---
 
-## Phase 2 — Database schema & migrations
-
-**Goal:** all tables live in Supabase with pgvector, FTS, and RLS configured via Alembic.
-
-- [ ] Run `uv run alembic init alembic` inside `backend/`; configure `alembic/env.py` to import `app.database.models.Base` and use `settings.DATABASE_URL`
-- [ ] Create `backend/app/database/models.py` with SQLAlchemy ORM models:
-  - `profiles` — `id` (UUID, FK to `auth.users`), `email`, `created_at`
-  - `chat_threads` — `id`, `user_id` (FK profiles), `title`, `created_at`, `updated_at`
-  - `chat_messages` — `id`, `thread_id`, `role` (user/assistant), `content`, `message_json` (JSONB), `created_at`
-  - `message_citations` — `id`, `message_id`, `chunk_id`, `excerpt`, `metadata` (JSONB), `created_at`
-  - `source_documents` — `id`, `ticker`, `company`, `filing_type`, `filing_date`, `fiscal_year`, `accession_number`, `source_url`, `markdown_content`, `created_at`
-  - `document_chunks` — `id`, `document_id`, `chunk_index`, `chunk_text`, `token_count`, `embedding` (Vector(768)), `search_vector` (TSVECTOR generated), `metadata` (JSONB with ticker, company, filing_type, filing_date, fiscal_year, accession_number, page, section), `created_at`
-- [ ] Generate initial migration: `uv run alembic revision --autogenerate -m "initial schema"`
-- [ ] Edit the generated migration to add explicit operations autogenerate misses:
-  - `op.execute("create extension if not exists vector")`
-  - HNSW index on `document_chunks.embedding` using `vector_cosine_ops`
-  - GIN index on `document_chunks.search_vector`
-  - `generated always as (to_tsvector('english', chunk_text)) stored` for `search_vector`
-  - RLS enable on `profiles`, `chat_threads`, `chat_messages`, `message_citations`
-  - RLS policy: users can only read/write their own rows
-- [ ] Apply migration: `uv run alembic upgrade head`
-- [ ] Verify all tables + extension visible in Supabase dashboard
-
----
-
-## Phase 3 — Auth & Supabase integration
+## Phase 2 — Auth & Supabase integration
 
 **Goal:** FastAPI can verify Supabase JWTs and return the authenticated user.
 
-- [ ] Create `backend/app/database/supabase.py`:
-  - `get_anon_client()` — Supabase client with anon key (for user-scoped ops forwarding user JWT)
-  - `get_admin_client()` — Supabase client with service_role key (for privileged writes)
 - [ ] Create `backend/app/auth/dependencies.py`:
   - `get_current_user(authorization: str = Header(...))` — extract Bearer token, call Supabase `auth.get_user(token)`, raise `401` on failure, return typed `AuthUser(id, email)`
 - [ ] Create `backend/app/api/auth.py` — GET `/me` endpoint using `get_current_user`, returns `{id, email}`; add router to `main.py`
@@ -93,7 +56,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 4 — Data ingestion pipeline
+## Phase 3 — Data ingestion pipeline
 
 **Goal:** ~25 SEC 10-K filings (5 companies × 5 years) downloaded, chunked, embedded, and loaded into Supabase.
 
@@ -113,7 +76,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 5 — Retrieval layer
+## Phase 4 — Retrieval layer
 
 **Goal:** given a user query, return the top-N relevant passages using hybrid search + RRF.
 
@@ -135,7 +98,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 6 — PydanticAI agent & grounding
+## Phase 5 — PydanticAI agent & grounding
 
 **Goal:** typed agent that produces grounded answers citing only retrieved passages.
 
@@ -172,7 +135,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 7 — Chat persistence
+## Phase 6 — Chat persistence
 
 **Goal:** chat threads and messages are durably stored in Supabase.
 
@@ -187,7 +150,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 8 — Chat streaming endpoint
+## Phase 7 — Chat streaming endpoint
 
 **Goal:** `POST /chat/stream` receives a user message, runs the full RAG turn, and streams the answer back in AI SDK wire format.
 
@@ -215,7 +178,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 9 — Frontend scaffold
+## Phase 8 — Frontend scaffold
 
 **Goal:** Vite React TypeScript SPA boots, config validated, router in place.
 
@@ -247,7 +210,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 10 — Frontend auth
+## Phase 9 — Frontend auth
 
 **Goal:** user can sign up, log in, and be redirected to the chat. Unauthenticated routes redirect to `/login`.
 
@@ -267,7 +230,7 @@ The critical path is: **data model → ingestion → retrieval → LLM → citat
 
 ---
 
-## Phase 11 — Frontend chat UI
+## Phase 10 — Frontend chat UI
 
 **Goal:** user can start a thread, ask a question, and see a streamed grounded answer.
 
