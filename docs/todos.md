@@ -50,8 +50,8 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 **Backend**
 
-- [ ] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
-- [ ] Reject missing/expired tokens with `401` before any chat or retrieval work
+- [x] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
+- [x] Reject missing/expired tokens with `401` before any chat or retrieval work
 
 **Frontend**
 
@@ -60,8 +60,8 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 - [x] `src/lib/supabase.ts` — browser Supabase client
 - [x] `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
 - [x] Sign-in / sign-up pages (email only, no SSO)
-- [ ] Protected routes — redirect unauthenticated users to login
-- [ ] Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
+- [x] Protected routes — redirect unauthenticated users to login
+- [x] Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
 
 ---
 

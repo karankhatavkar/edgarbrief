@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useSession } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +24,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const navigate = useNavigate()
+  const { session, loading: sessionLoading } = useSession()
 
   function switchMode(next: string) {
     setMode(next as Mode)
@@ -42,15 +44,26 @@ export default function AuthPage() {
         if (error) throw error
         navigate('/')
       } else {
-        const { error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        setSuccess(true)
+        // With email confirmation disabled, signUp returns a live session and
+        // we drop the user straight into the app. Otherwise prompt them to
+        // confirm via the emailed link.
+        if (data.session) {
+          navigate('/')
+        } else {
+          setSuccess(true)
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (!sessionLoading && session) {
+    return <Navigate to="/" replace />
   }
 
   return (
