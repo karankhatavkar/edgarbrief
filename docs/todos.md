@@ -78,11 +78,11 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 **Frontend**
 
-- [ ] React Router: login, chat list, chat thread routes
-- [ ] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
-- [ ] Thread sidebar (past conversations)
-- [ ] Basic message list + input + streaming indicator
-- [ ] Verify: create thread, send message, see streamed stub response, reload and see history
+- [x] React Router: login, chat list, chat thread routes
+- [x] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
+- [x] Thread sidebar (past conversations)
+- [x] Basic message list + input + streaming indicator
+- [x] Verify: create thread, send message, see streamed stub response, reload and see history
 
 ---
 
