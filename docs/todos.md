@@ -86,7 +86,25 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 4 — Retrieval layer
+## Phase 4 — Ingestion pipeline
+
+**Goal:** SEC filings in the corpus are parsed, chunked, embedded, and stored in Supabase.
+
+- [x] `ingest/` scripts (or CLI entrypoint) for one-off corpus loading
+- [x] HTML → normalized Markdown extraction (preserve page/section metadata)
+- [ ] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
+- [ ] Write `source_documents` rows with filing metadata from `manifest.json`
+- [ ] Write `document_chunks` rows with text + metadata
+- [ ] Gemini embedding generation (`text-embedding-004`) → store `vector(768)` per chunk
+- [ ] Generated `tsvector` populated for full-text search
+- [ ] Idempotent re-run (skip already-ingested documents)
+- [ ] Unit tests: chunking logic, metadata extraction 
+- [ ] Run ingestion on full sample corpus (25 filings × 5 companies)
+- [ ] Verify: chunks exist in Supabase; spot-check a known passage (e.g. Apple revenue mix table)
+
+---
+
+## Phase 5 — Retrieval layer
 
 **Goal:** given a user query, return the top-N relevant passages using hybrid search + RRF.
 
@@ -108,7 +126,7 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 5 — PydanticAI agent & grounding
+## Phase 6 — PydanticAI agent & grounding
 
 **Goal:** typed agent that produces grounded answers citing only retrieved passages.
 
@@ -145,7 +163,7 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 6 — Chat persistence
+## Phase 7 — Chat persistence
 
 **Goal:** chat threads and messages are durably stored in Supabase.
 
@@ -160,7 +178,7 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 7 — Chat streaming endpoint
+## Phase 8 — Chat streaming endpoint
 
 **Goal:** `POST /chat/stream` receives a user message, runs the full RAG turn, and streams the answer back in AI SDK wire format.
 

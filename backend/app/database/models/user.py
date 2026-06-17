@@ -3,7 +3,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,8 +20,9 @@ class User(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
         primary_key=True,
+        # The FK to auth.users is enforced at DB level in the migration;
+        # omitted here because SQLAlchemy cannot resolve cross-schema auth.* tables.
     )
     email: Mapped[str | None] = mapped_column(String)
 
