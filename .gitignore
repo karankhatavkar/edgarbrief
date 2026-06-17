@@ -27,6 +27,7 @@ pnpm-debug.log*
 
 # Data / artifacts (downloaded corpus files are large, never check in)
 /data/downloads/*
+/data/markdown/*
 !/data/downloads/.gitkeep
 *.parquet
 
