@@ -65,23 +65,24 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 3 — Data ingestion pipeline
+## Phase 3 — Chat shell (vertical slice, stubbed)
 
-**Goal:** ~25 SEC 10-K filings (5 companies × 5 years) downloaded, chunked, embedded, and loaded into Supabase.
+**Goal:** end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
-- [ ] Update `data/download.py` to fetch 10-K filings for Apple (AAPL), Amazon (AMZN), Alphabet (GOOGL), Microsoft (MSFT), NVIDIA (NVDA) for fiscal years 2021–2025 from SEC EDGAR (`https://data.sec.gov/`); save raw HTML to `data/payloads/`
-- [ ] Create `backend/ingest/extract.py` — convert SEC HTML filing → clean Markdown; strip boilerplate nav/headers; preserve section headers as `## Section Name`
-- [ ] Create `backend/ingest/chunk.py`:
-  - Split Markdown into passages of ~500 tokens with ~100-token overlap
-  - Preserve section header context in each chunk's metadata
-  - Return list of `Chunk(text, token_count, metadata)`
-- [ ] Create `backend/ingest/embed.py` — batch-call `google-genai` `text-embedding-004` model on chunk texts; return list of 768-dim float vectors
-- [ ] Create `backend/ingest/load.py` — upsert `source_documents` row, then batch-insert `document_chunks` rows with chunk text + embedding + metadata; use admin Supabase client
-- [ ] Create `backend/ingest/run.py` — orchestrate: `download → extract → chunk → embed → load` for all filings; idempotent (skip if accession_number already loaded)
-- [ ] Run ingestion: `uv run python -m ingest.run`
-- [ ] Verify chunk count and a sample embedding in Supabase
-- [ ] Write `backend/tests/ingest/test_chunk.py` — unit tests for chunking logic (no network)
-- [ ] Write `backend/tests/ingest/test_extract.py` — unit tests for HTML → Markdown extraction
+**Backend**
+
+- [x] Chat thread CRUD: list threads, create thread, load message history
+- [x] `POST /chat/stream` — accepts AI SDK message format, streams a stubbed assistant reply
+- [x] Persist user + assistant messages to `chat_messages` after stream completes
+- [x] `403` when user accesses another user's thread
+
+**Frontend**
+
+- [ ] React Router: login, chat list, chat thread routes
+- [ ] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
+- [ ] Thread sidebar (past conversations)
+- [ ] Basic message list + input + streaming indicator
+- [ ] Verify: create thread, send message, see streamed stub response, reload and see history
 
 ---
 
