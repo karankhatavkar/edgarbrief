@@ -8,6 +8,8 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Public Sans Variable', sans-serif;
+    --font-serif: 'Iowan Old Style', 'Palatino Linotype', 'Palatino', Georgia, 'Times New Roman', serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -127,4 +129,84 @@
   html {
     @apply font-sans;
     }
+}
+
+/* ---------------------------------------------------------------------------
+   Chat surface details — texture + motion, all built on existing shadcn
+   tokens (no invented colors). Keeps the editorial character in CSS so the
+   components stay readable.
+--------------------------------------------------------------------------- */
+
+/* Faint ledger dot-grid for the chat canvas, tinted from --foreground. */
+.ledger-canvas {
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 5%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+}
+
+/* Blinking block caret appended to streaming assistant text. */
+.stream-caret {
+  display: inline-block;
+  width: 0.5ch;
+  height: 1.05em;
+  margin-left: 1px;
+  translate: 0 0.16em;
+  background: var(--foreground);
+  animation: caret-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Staggered entrance for messages and empty-state elements. */
+.animate-message-in {
+  animation: message-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* "Reviewing the filing" dots shown before the first token arrives. */
+.thinking-dot {
+  animation: thinking-bounce 1.25s ease-in-out infinite;
+}
+
+@keyframes thinking-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 0.9;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-message-in,
+  .thinking-dot,
+  .stream-caret {
+    animation: none;
+  }
 }
