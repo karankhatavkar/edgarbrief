@@ -24,6 +24,28 @@ _SERVER_OPTIONS = AsyncClientOptions(auto_refresh_token=False, persist_session=F
 _service_client: AsyncClient | None = None
 _service_lock = asyncio.Lock()
 
+_anon_client: AsyncClient | None = None
+_anon_lock = asyncio.Lock()
+
+
+async def anon_client() -> AsyncClient:
+    """Return the shared anon-key client, creating it on first use.
+
+    Carries no caller JWT, so it runs under RLS as the anonymous role. Used to
+    verify caller tokens via ``auth.get_user`` — pass the token to that call
+    rather than binding it to this shared client.
+    """
+    global _anon_client
+    if _anon_client is None:
+        async with _anon_lock:
+            if _anon_client is None:
+                _anon_client = await create_async_client(
+                    settings.supabase_url,
+                    settings.supabase_anon_key,
+                    options=_SERVER_OPTIONS,
+                )
+    return _anon_client
+
 
 async def service_client() -> AsyncClient:
     """Return the shared service-role client, creating it on first use.
