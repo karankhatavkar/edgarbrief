@@ -48,6 +48,17 @@ backend/
 └── pyproject.toml
 ```
 
+## Ingestion / chunking (`ingest/`)
+
+Full design lives in [../docs/architecture.md](../docs/architecture.md) (`Chunking and embedding`). Conventions:
+
+- **Chunking is heading-anchored and token-bounded**, written in-house — no third-party text splitter (the recursive splitter is <100 lines).
+- A chunk **never crosses a `### Item` / `## PART` boundary**; carry the heading breadcrumb (`PART I > Item 1A. Risk Factors`) into each chunk's embedded text.
+- Target ≈512 tokens, max ≈800, min ≈64, ~80-token (one-paragraph) overlap — sized to the `text-embedding-004` ~2,048-token input cap.
+- **Tables are atomic.** A Markdown table (plus its caption) is one block; if it exceeds the max, split on row boundaries only and repeat the header row — never split a row.
+- Strip page-footer (`… Form 10-K | <page>`) and `#i…` anchor noise before chunking.
+- Persist `chunk_index`, `token_count`, `section`, and source offsets per chunk; keep `chunk_index` stable so neighbor lookups stay ordered.
+
 ## Code style (backend-specific)
 
 - **Type hints on public functions and module-level things.** Don't annotate every local.

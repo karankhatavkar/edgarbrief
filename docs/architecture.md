@@ -196,6 +196,81 @@ The agent's instructions should encode the product contract:
 
 Retrieval and grounding remain independent from PydanticAI. This keeps ingestion, retrieval tests, and citation validation testable without invoking the LLM.
 
+## Ingestion Pipeline
+
+The ingestion pipeline converts raw SEC filings into retrieval-ready chunks stored in Supabase. It runs offline before any user query is served.
+
+```
+SEC EDGAR
+    │
+    ▼
+data/download.py          ← fetches raw .htm filings into data/downloads/<year>/
+    │
+    ▼
+data/convert.py           ← two-stage HTM → Markdown conversion
+    │   Stage 1: EDGAR HTML Cleaner (BeautifulSoup)
+    │   Stage 2: docling DocumentConverter
+    │
+    ▼
+data/markdown/<year>/*.md ← normalized Markdown, one file per filing
+    │
+    ▼
+backend/ingest/           ← chunk, embed, write to Supabase
+    │
+    ▼
+Supabase Postgres         ← source_documents + document_chunks (text, embedding, tsvector)
+```
+
+### HTM → Markdown conversion (`data/convert.py`)
+
+EDGAR 10-K filings are published in Inline XBRL (iXBRL) format. Every financial table cell carries a `colspan` attribute (typically `colspan="3"`) for XBRL data alignment. A vanilla HTML converter expands each spanned cell into N identical copies, making 83–96% of financial table rows triplicate. A custom two-stage pipeline is used instead.
+
+**Stage 1 — EDGAR HTML Cleaner** runs three transforms before docling sees the file:
+
+1. *Strip the hidden XBRL block.* Each filing embeds up to 300 KB of machine-readable `<div style="display:none">` metadata at the top. This is invisible in a browser and is removed before conversion.
+2. *Normalize table colspans.* The cleaner strips all `colspan` attributes so every cell occupies exactly one column, then removes columns that are empty in every row. This eliminates the phantom duplicate values that EDGAR's XBRL alignment colspans produce. Empty tables are removed entirely.
+3. *Inject semantic headings.* Plain `<div>` and `<p>` tags holding `PART I/II/III/IV` and `Item N[A-C].` text are replaced with `<h2>` / `<h3>` tags so docling emits proper `##` / `###` Markdown headings. This is critical for heading-based chunk splitting downstream.
+
+**Stage 2 — docling** (`DocumentConverter`, `compact_tables=True`) handles all prose: paragraphs, lists, in-document anchor links, and image placeholders. The cleaned HTML is passed as a `DocumentStream`.
+
+Result: duplication drops from 29–44% to 1–5%, phantom tables are eliminated, and all Part/Item labels become navigable Markdown headings. See `data/README.md` for full quality metrics.
+
+### Chunking and embedding (backend/ingest/)
+
+After conversion the ingest scripts:
+
+1. Read normalized Markdown files and the `manifest.json` filing metadata.
+2. Split each document into chunks with the heading-anchored, token-bounded strategy described below.
+3. Write one `source_documents` row per filing (ticker, filing type, date, accession number, normalized Markdown content).
+4. Embed each chunk with Gemini `text-embedding-004` (768 dimensions).
+5. Write one `document_chunks` row per chunk (text, embedding vector, generated `tsvector`, metadata JSON).
+6. Idempotent: skip documents already present in Supabase.
+
+Chunk metadata JSON includes: `ticker`, `company`, `filing_type`, `filing_date`, `fiscal_year`, `accession_number`, `chunk_index`, `section` (from the nearest `##`/`###` heading), `token_count`, and source byte offsets into the Markdown. The section field is populated from the heading hierarchy that Stage 1 injected — without it, every chunk would have an empty section label.
+
+#### Chunking strategy
+
+The chunker is a small, owned module (no third-party text splitter — see the dependency policy in `CLAUDE.md`). It is **heading-anchored and token-bounded with atomic table handling**, chosen for the specific shape of the corpus rather than a generic default.
+
+**Why this shape.** A 10-K has a strong but shallow structure. After Stage 1 heading injection, every filing carries exactly the same skeleton: four `## PART I–IV` headings and ~22–30 `### Item N` headings, with **no deeper headings** — the sub-sections inside an Item (e.g. individual risk factors, "Macroeconomic and Industry Risks") are plain prose, not marked up. So `### Item` is the deepest reliable structural boundary. Item sizes also span four orders of magnitude in the same document: tiny stubs like *Item 1B. Unresolved Staff Comments* (~1 token) or *Item 4. Mine Safety Disclosures* (~16 tokens) sit beside *Item 1A. Risk Factors* (~12,900 tokens) and *Item 8. Financial Statements* (~19,300 tokens). Item 8 is dominated by large multi-column financial tables. Two naive approaches are therefore ruled out: one-chunk-per-Item is impossible because the largest Items dwarf the embedder's ~2,048-token input cap, and fixed-size windowing ignores the structure entirely — it splits tables mid-row (discarding the whole point of `convert.py`) and produces unusable citations.
+
+**Parameters** (tuned to the `text-embedding-004` input cap and retrieval precision):
+
+- Target ≈ **512 tokens**, hard max ≈ **800**, min ≈ **64** (so tiny Items stay whole rather than merging across boundaries).
+- Overlap ≈ one paragraph / ~80 tokens between adjacent prose chunks, so a thought split across a boundary is still retrievable. `read_surrounding_chunks` recovers wider context at query time.
+
+**Algorithm:**
+
+1. **Pre-clean.** Strip the repeating page-footer lines (`… Form 10-K | <page>`) and `#i…` anchor-link artifacts that survive conversion, so they do not pollute chunk text or embeddings.
+2. **Hard-split on headings.** A chunk never crosses a `### Item` (or `## PART`) boundary. The heading breadcrumb (e.g. `PART I > Item 1A. Risk Factors`) is carried down to every chunk in that section.
+3. **Pack blocks within a section.** Walk the section's top-level blocks (paragraphs separated by blank lines, and tables):
+   - **Prose:** greedily pack whole paragraphs until the next would exceed the max, emit the chunk, then start the next one with the overlap paragraph. If a single paragraph exceeds the max, fall back to sentence splitting.
+   - **Tables:** treat each Markdown table plus its caption line (e.g. `CONSOLIDATED STATEMENTS OF OPERATIONS`) as one **atomic block**. If a single table exceeds the max, split it on **row boundaries only**, repeating the header row and caption in each piece. Never split a row.
+4. **Prefix the breadcrumb into embedded text.** Each chunk's embedded text begins with its breadcrumb. This injects the section context that docling could not mark inline, so "Risk Factors" / "Item 8" semantics ride along even for a chunk taken from the middle of a long section.
+5. **Emit metadata** as listed above, including a stable per-document `chunk_index` so neighbor lookups and citations stay ordered.
+
+**Worked example.** *Item 1A. Risk Factors* (~12,900 tokens) becomes ~25 prose chunks of ~512 tokens, each prefixed `PART I > Item 1A. Risk Factors` and overlapping its predecessor by one paragraph. The *Consolidated Statements of Operations* table inside *Item 8* (~600 tokens) stays as a single intact chunk prefixed `PART II > Item 8. Financial Statements`, so a query like "What was total net sales in 2024?" retrieves the whole table with a clean Item-level citation, and "What macroeconomic risks does the company cite?" retrieves a focused Item 1A chunk.
+
 ## Retrieval Strategy
 
 EdgarBrief uses hybrid retrieval:
