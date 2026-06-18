@@ -104,25 +104,17 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 ---
 
-## Phase 5 — Retrieval layer
+## Phase 5 — Retrieval
 
-**Goal:** given a user query, return the top-N relevant passages using hybrid search + RRF.
+Goal: a user question returns ranked, relevant source passages.
 
-- [ ] Create `backend/app/retrieval/queries.py`:
-  - `semantic_search(conn, query_embedding, top_k)` — pgvector cosine similarity query against `document_chunks.embedding`
-  - `fulltext_search(conn, query_text, top_k)` — Postgres FTS query against `document_chunks.search_vector`
-  - Both return list of `(chunk_id, rank_or_score)` tuples
-- [ ] Create `backend/app/retrieval/fusion.py` — `reciprocal_rank_fusion(ranked_lists, k=60)` → merged ranked list of chunk IDs; pure Python, no DB calls
-- [ ] Create `backend/app/database/documents.py`:
-  - `fetch_chunks(conn, chunk_ids)` — fetch full chunk rows by ID list, preserving order
-  - `fetch_document(conn, document_id)` — fetch a source document row
-  - `fetch_neighboring_chunks(conn, chunk_id, window=1)` — fetch ±1 chunks around a chunk for context expansion
-- [ ] Create `backend/app/retrieval/retriever.py` — `DocumentRetriever` class:
-  - `retrieve(query: str, top_k: int = 10) → list[SourcePassage]`
-  - Embed query with Gemini → semantic search → FTS → RRF → fetch chunks → return typed `SourcePassage` objects
-- [ ] Write `backend/tests/retrieval/test_fusion.py` — unit tests for RRF (no DB)
-- [ ] Write `backend/tests/retrieval/test_retriever.py` — integration test against live Supabase (mark `@pytest.mark.integration`)
-- [ ] Manual test: run a sample query and verify top results are relevant
+- [ ] `retrieval/queries.py` — pgvector semantic search over `document_chunks`
+- [ ] `retrieval/queries.py` — Postgres full-text search over `search_vector`
+- [ ] `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
+- [ ] `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
+- [ ] Unit tests: fusion ranking, query assembly (mock DB)
+- [ ] Integration test (optional, `@pytest.mark.integration`): real query against ingested corpus
+- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (manual or scripted)
 
 ---
 
