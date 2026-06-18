@@ -88,6 +88,24 @@ async def save_message(
     return _parse_message(result.data[0])
 
 
+async def save_assistant_message(
+    client: AsyncClient,
+    thread_id: uuid.UUID,
+    answer: str,
+    citation_rows: list[dict],
+) -> MessageRow:
+    """Persist an assistant message and its citation rows.
+
+    ``citation_rows`` carry ``chunk_id``/``claim_text``/``passage_index``; the
+    new message's id is filled in here so callers stay free of message identity.
+    """
+    message = await save_message(client, thread_id, "assistant", answer)
+    rows = [{**row, "message_id": str(message.id)} for row in citation_rows]
+    if rows:
+        await client.table("message_citations").insert(rows).execute()
+    return message
+
+
 async def list_messages(
     client: AsyncClient, thread_id: uuid.UUID
 ) -> list[MessageRow]:

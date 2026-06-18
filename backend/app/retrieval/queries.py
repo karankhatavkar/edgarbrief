@@ -43,6 +43,18 @@ async def fulltext_search(
     return list((await session.scalars(stmt)).all())
 
 
+async def get_chunk_by_id(
+    session: AsyncSession, chunk_id: uuid.UUID
+) -> DocumentChunk | None:
+    """Fetch a single chunk by id with its source document eager-loaded."""
+    stmt = (
+        select(DocumentChunk)
+        .options(selectinload(DocumentChunk.document))
+        .where(DocumentChunk.id == chunk_id)
+    )
+    return (await session.scalars(stmt)).first()
+
+
 async def load_anchors(
     session: AsyncSession, ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, DocumentChunk]:
@@ -75,7 +87,9 @@ async def fetch_neighbors(
     }
     if not pairs:
         return []
-    stmt = select(DocumentChunk).where(
-        tuple_(DocumentChunk.document_id, DocumentChunk.chunk_index).in_(list(pairs))
+    stmt = (
+        select(DocumentChunk)
+        .options(selectinload(DocumentChunk.document))
+        .where(tuple_(DocumentChunk.document_id, DocumentChunk.chunk_index).in_(list(pairs)))
     )
     return list((await session.scalars(stmt)).all())

@@ -118,40 +118,22 @@ Goal: a user question returns ranked, relevant source passages.
 
 ---
 
-## Phase 6 — PydanticAI agent & grounding
+## Phase 6 — LLM agent & grounding
 
-**Goal:** typed agent that produces grounded answers citing only retrieved passages.
+Goal: grounded answers with enforced citations — the core product contract.
 
-- [ ] Create `backend/app/assistant/deps.py`:
-  ```python
-  @dataclass
-  class DocumentAgentDeps:
-      user_id: str
-      thread_id: str
-      retriever: DocumentRetriever
-      grounding_validator: GroundingValidator
-  ```
-- [ ] Create `backend/app/assistant/outputs.py`:
-  ```python
-  class SourcePassage(BaseModel): chunk_id, ticker, company, filing_type, filing_date, page, section, excerpt
-  class Citation(BaseModel): chunk_id, claim_text, passage_index
-  class GroundedAnswer(BaseModel): answer: str, citations: list[Citation], cited_passages: list[SourcePassage]
-  ```
-- [ ] Create `backend/app/assistant/instructions.md` — system prompt encoding the product contract:
-  - Answer only from retrieved passages; never add facts not present in the corpus
-  - Cite every factual claim with the chunk ID and passage index
-  - If retrieved context is insufficient, say "the corpus does not contain enough evidence"
-  - Do not provide stock recommendations or investment advice
-  - Keep answers concise for analyst review
-- [ ] Create `backend/app/assistant/agent.py` — PydanticAI agent with Gemini:
-  - Model: `gemini-2.0-flash` (or latest available)
-  - Result type: `GroundedAnswer`
-  - Tools: `search_filings(query)`, `read_chunk(chunk_id)`, `read_surrounding_chunks(chunk_id)`
-  - Load instructions from `instructions.md`
-- [ ] Create `backend/app/grounding/validator.py` — `GroundingValidator`:
-  - `validate(answer: GroundedAnswer, retrieved_passages: list[SourcePassage])` → raises `GroundingError` if any citation references a chunk not in the retrieved set
-- [ ] Write `backend/tests/grounding/test_validator.py` — unit tests for grounding validation logic
-- [ ] Integration test: run agent with a sample query, verify `GroundedAnswer` structure and all citations are grounded
+- [x] `assistant/instructions.md` — product contract (cite everything, refuse to invent, no stock picks)
+- [x] PydanticAI agent (`gemini-2.5-flash-lite`) with typed deps (`DocumentAgentDeps`) and output (`AgentReply` → assembled `GroundedAnswer`)
+- [x] Agent tools: `search_filings`, `read_chunk`, `read_surrounding_chunks`
+- [x] `chat/orchestrator.py` — one turn: agent (retrieves via tools) → validate → stream → persist
+- [x] `grounding/validator.py` — every citation maps to a retrieved passage; fail closed on violation
+- [x] `chat/streaming.py` — AI SDK-compatible stream (text deltas + citation metadata parts)
+- [x] Persist `message_citations` linked to assistant messages
+- [x] Unit tests: citation validation, grounding enforcement, streaming frames, orchestrator
+- [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions) — deferred (needs live Gemini + Supabase):
+  - [ ] Answers cite specific filings and pages
+  - [ ] Under-specified questions get "not enough evidence" responses
+  - [ ] Question 10 (generative AI margins) refuses to infer beyond filings
 
 ---
 

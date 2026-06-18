@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Google Gemini
     gemini_api_key: str
+    gemini_chat_model: str = "gemini-2.5-flash-lite"
     gemini_embedding_model: str = "gemini-embedding-001"
     gemini_embedding_dimensions: int = 768
 

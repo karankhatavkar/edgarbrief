@@ -10,7 +10,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.api.deps import UserClientDep, require_owned_thread
-from app.chat.stream import DATA_STREAM_HEADERS, stub_turn
+from app.chat.orchestrator import run_chat_turn
+from app.chat.streaming import DATA_STREAM_HEADERS
 from app.database import threads as thread_db
 from app.database.supabase import service_client
 
@@ -39,13 +40,13 @@ async def chat_stream(body: StreamRequest, client: UserClientDep) -> StreamingRe
         )
 
     # Persist the user's question before streaming so a mid-stream client
-    # disconnect can't drop it; stub_turn persists the assistant reply at the
-    # end of the stream.
+    # disconnect can't drop it; run_chat_turn persists the assistant reply and
+    # its citations at the end of the stream.
     svc = await service_client()
     await thread_db.save_message(svc, body.thread_id, "user", user_messages[-1].content)
 
     return StreamingResponse(
-        stub_turn(body.thread_id, svc),
+        run_chat_turn(svc, body.thread_id, user_messages[-1].content),
         media_type="text/plain; charset=utf-8",
         headers=DATA_STREAM_HEADERS,
     )
