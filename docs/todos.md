@@ -95,12 +95,12 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 - [x] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
 - [x] Write `source_documents` rows with filing metadata from `manifest.json`
 - [x] Write `document_chunks` rows with text + metadata
-- [ ] Gemini embedding generation (`gemini-embedding-001`) → store `vector(768)` per chunk
-- [ ] Generated `tsvector` populated for full-text search
-- [ ] Idempotent re-run (skip already-ingested documents)
-- [ ] Unit tests: chunking logic, metadata extraction 
-- [ ] Run ingestion on full sample corpus (25 filings × 5 companies)
-- [ ] Verify: chunks exist in Supabase; spot-check a known passage (e.g. Apple revenue mix table)
+- [x] Gemini embedding generation (`gemini-embedding-001`) → store `vector(768)` per chunk
+- [x] Generated `tsvector` populated for full-text search
+- [x] Idempotent re-run (skip already-ingested documents)
+- [x] Unit tests: chunking logic, metadata extraction 
+- [x] Run ingestion on full sample corpus (25 filings × 5 companies)
+- [x] Verify: chunks exist in Supabase; spot-check a known passage (e.g. Apple revenue mix table)
 
 ---
 
