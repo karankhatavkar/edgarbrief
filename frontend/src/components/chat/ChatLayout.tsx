@@ -23,6 +23,7 @@ export function ChatLayout() {
   const email = session?.user.email ?? null;
 
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [loadingThreads, setLoadingThreads] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const refreshThreads = useCallback(async () => {
@@ -35,7 +36,10 @@ export function ChatLayout() {
       .then((rows) => {
         if (!cancelled) setThreads(rows);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingThreads(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -57,7 +61,12 @@ export function ChatLayout() {
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       <aside className="hidden w-72 shrink-0 border-r md:flex">
-        <AppSidebar threads={threads} createThread={createThread} email={email} />
+        <AppSidebar
+          threads={threads}
+          loading={loadingThreads}
+          createThread={createThread}
+          email={email}
+        />
       </aside>
 
       {mobileOpen && (
@@ -69,6 +78,7 @@ export function ChatLayout() {
           <aside className="absolute inset-y-0 left-0 w-72 border-r shadow-xl">
             <AppSidebar
               threads={threads}
+              loading={loadingThreads}
               createThread={createThread}
               email={email}
               onClose={() => setMobileOpen(false)}

@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { SourcePassage } from "@/lib/citations";
 
 /** A chat thread as returned by the backend (`/threads`). */
 export interface Thread {
@@ -15,6 +16,8 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  /** Cited source passages — present on assistant messages that cited sources. */
+  citations?: SourcePassage[];
 }
 
 export function listThreads(): Promise<Thread[]> {

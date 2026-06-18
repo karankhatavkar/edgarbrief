@@ -1,8 +1,15 @@
 import { LegalDocument01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/icon";
+import { CitationChips } from "@/components/chat/CitationChips";
 import type { UiMessage } from "@/hooks/use-chat";
+import type { SourcePassage } from "@/lib/citations";
 
-export function MessageItem({ message }: { message: UiMessage }) {
+interface MessageItemProps {
+  message: UiMessage;
+  onSelectPassage: (passage: SourcePassage) => void;
+}
+
+export function MessageItem({ message, onSelectPassage }: MessageItemProps) {
   if (message.role === "user") {
     return (
       <div className="animate-message-in flex justify-end">
@@ -37,10 +44,13 @@ export function MessageItem({ message }: { message: UiMessage }) {
             <span className="font-serif text-sm italic">Reviewing the filing…</span>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap break-words font-serif text-[16px] leading-[1.7] text-foreground">
-            {message.content}
-            {message.streaming && <span className="stream-caret align-baseline" aria-hidden />}
-          </p>
+          <div className="flex flex-col gap-4">
+            <p className="whitespace-pre-wrap break-words font-serif text-[16px] leading-[1.7] text-foreground">
+              {message.content}
+              {message.streaming && <span className="stream-caret align-baseline" aria-hidden />}
+            </p>
+            <CitationChips passages={message.citations ?? []} onSelect={onSelectPassage} />
+          </div>
         )}
       </div>
     </div>

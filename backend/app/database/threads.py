@@ -119,6 +119,35 @@ async def list_messages(
     return [_parse_message(row) for row in result.data]
 
 
+async def list_message_citations(
+    client: AsyncClient, message_ids: list[uuid.UUID]
+) -> list[dict]:
+    """Return citation rows for the given messages, newest claim order preserved.
+
+    Each row embeds its source chunk and that chunk's filing, so the caller can
+    rebuild the same ``SourcePassage`` shape the live stream emits. Ordered by
+    ``passage_index`` to match the numbering shown while streaming.
+
+    Reads corpus tables that aren't RLS-readable by the user client, so callers
+    pass the service client — thread ownership must already be enforced.
+    """
+    if not message_ids:
+        return []
+    result = (
+        await client.table("message_citations")
+        .select(
+            "message_id, passage_index, "
+            "document_chunks(id, section, page, content, "
+            "source_documents(ticker, company, fiscal_year, filing_type, "
+            "filing_date, source_url))"
+        )
+        .in_("message_id", [str(m) for m in message_ids])
+        .order("passage_index")
+        .execute()
+    )
+    return result.data
+
+
 def _parse_thread(row: dict) -> ThreadRow:
     return ThreadRow(
         id=uuid.UUID(row["id"]),

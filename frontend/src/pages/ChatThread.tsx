@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { Menu01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/icon";
 import { MessageList } from "@/components/chat/MessageList";
 import { Composer } from "@/components/chat/Composer";
+import { SourceSheet } from "@/components/chat/SourceSheet";
 import { useChat } from "@/hooks/use-chat";
 import type { ChatOutletContext } from "@/components/chat/ChatLayout";
+import type { SourcePassage } from "@/lib/citations";
 
 export default function ChatThread() {
   const { threadId = "" } = useParams();
@@ -18,8 +20,10 @@ function ChatThreadView({ threadId }: { threadId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { messages, status, error, send, stop } = useChat(threadId);
+  const { messages, status, error, send, retry, retryable, stop } = useChat(threadId);
   const title = threads.find((t) => t.id === threadId)?.title ?? "New brief";
+
+  const [activePassage, setActivePassage] = useState<SourcePassage | null>(null);
 
   // A first message handed over from the home screen, auto-sent exactly once.
   const consumed = useRef(false);
@@ -50,12 +54,21 @@ function ChatThreadView({ threadId }: { threadId: string }) {
         </button>
         <h1 className="min-w-0 flex-1 truncate font-serif text-[17px] tracking-tight">{title}</h1>
         <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground sm:inline">
-          Phase 3 · stub
+          Grounded in filings
         </span>
       </header>
 
-      <MessageList messages={messages} status={status} error={error} />
+      <MessageList
+        messages={messages}
+        status={status}
+        error={error}
+        retryable={retryable}
+        onRetry={retry}
+        onSelectPassage={setActivePassage}
+      />
       <Composer onSend={handleSend} status={status} onStop={stop} />
+
+      <SourceSheet passage={activePassage} onClose={() => setActivePassage(null)} />
     </div>
   );
 }

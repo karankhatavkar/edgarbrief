@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import type { ApiError } from "@/lib/http";
+import type { SourcePassage } from "@/lib/citations";
 
 export interface StreamMessage {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ export interface StreamChatOptions {
   threadId: string;
   messages: StreamMessage[];
   onToken: (token: string) => void;
+  onCitations?: (passages: SourcePassage[]) => void;
   signal?: AbortSignal;
 }
 
@@ -18,13 +20,14 @@ export interface StreamChatOptions {
  * Stream one assistant turn from `POST /chat/stream`.
  *
  * The backend speaks the Vercel AI SDK data-stream protocol v1: newline-
- * delimited frames of the form `PREFIX:JSON`. We only act on two of them:
+ * delimited frames of the form `PREFIX:JSON`. We act on:
  *
  *   0:"token"             — a text delta (a JSON-encoded string)
+ *   8:[{…}]               — cited source passages (the trust UI's ledger)
  *   d:{"finishReason"…}   — the terminal finish frame
  *   3:"message"           — the protocol's error frame
  *
- * Any other frame type carries no text we render and is ignored.
+ * Any other frame type carries nothing we render and is ignored.
  *
  * This is the one place we bypass the JSON `api` client: the response body is a
  * stream rather than a JSON document, so it needs a raw `fetch` + a
@@ -35,6 +38,7 @@ export async function streamChat({
   threadId,
   messages,
   onToken,
+  onCitations,
   signal,
 }: StreamChatOptions): Promise<void> {
   const { data } = await supabase.auth.getSession();
@@ -74,15 +78,19 @@ export async function streamChat({
     while ((newline = buffer.indexOf("\n")) !== -1) {
       const line = buffer.slice(0, newline);
       buffer = buffer.slice(newline + 1);
-      handleFrame(line, onToken);
+      handleFrame(line, onToken, onCitations);
     }
   }
 
   // A final frame may arrive without a trailing newline.
-  if (buffer.length > 0) handleFrame(buffer, onToken);
+  if (buffer.length > 0) handleFrame(buffer, onToken, onCitations);
 }
 
-function handleFrame(line: string, onToken: (token: string) => void): void {
+function handleFrame(
+  line: string,
+  onToken: (token: string) => void,
+  onCitations?: (passages: SourcePassage[]) => void,
+): void {
   const separator = line.indexOf(":");
   if (separator === -1) return;
 
@@ -92,6 +100,9 @@ function handleFrame(line: string, onToken: (token: string) => void): void {
   switch (prefix) {
     case "0":
       onToken(JSON.parse(payload) as string);
+      return;
+    case "8":
+      onCitations?.(JSON.parse(payload) as SourcePassage[]);
       return;
     case "3": {
       const err: ApiError = {

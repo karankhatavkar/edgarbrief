@@ -12,6 +12,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, ConfigDict
 
 from app.api.deps import UserClientDep, require_owned_thread
+from app.assistant.outputs import SourcePassage
 from app.auth.dependencies import CurrentUserDep
 from app.database import threads as thread_db
 from app.database.supabase import service_client
@@ -36,6 +37,9 @@ class MessageOut(BaseModel):
     role: str
     content: str
     created_at: datetime
+    # Same shape the live stream emits on the `8:` frame, so the UI reads one
+    # citation type. Populated only for assistant messages that cited sources.
+    citations: list[SourcePassage] = []
 
 
 class CreateThreadIn(BaseModel):
@@ -66,4 +70,38 @@ async def create_thread(
 async def get_messages(thread_id: uuid.UUID, client: UserClientDep) -> list[MessageOut]:
     await require_owned_thread(client, thread_id)
     rows = await thread_db.list_messages(client, thread_id)
-    return [MessageOut.model_validate(r) for r in rows]
+
+    # Reattach persisted citations so a reloaded thread keeps its source ledger.
+    assistant_ids = [r.id for r in rows if r.role == "assistant"]
+    by_message: dict[uuid.UUID, list[SourcePassage]] = {}
+    if assistant_ids:
+        svc = await service_client()
+        for raw in await thread_db.list_message_citations(svc, assistant_ids):
+            message_id, passage = _passage_from_row(raw)
+            by_message.setdefault(message_id, []).append(passage)
+
+    messages = []
+    for r in rows:
+        message = MessageOut.model_validate(r)
+        message.citations = by_message.get(r.id, [])
+        messages.append(message)
+    return messages
+
+
+def _passage_from_row(row: dict) -> tuple[uuid.UUID, SourcePassage]:
+    """Map an embedded ``message_citations`` row to a ``SourcePassage``."""
+    chunk = row["document_chunks"]
+    document = chunk["source_documents"]
+    return uuid.UUID(row["message_id"]), SourcePassage(
+        passage_index=row["passage_index"],
+        chunk_id=uuid.UUID(chunk["id"]),
+        ticker=document["ticker"],
+        company=document["company"],
+        fiscal_year=document["fiscal_year"],
+        filing_type=document["filing_type"],
+        filing_date=document["filing_date"],
+        section=chunk["section"],
+        page=chunk["page"],
+        source_url=document["source_url"],
+        excerpt=chunk["content"],
+    )

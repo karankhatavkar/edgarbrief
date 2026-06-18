@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageItem } from "@/components/chat/MessageItem";
+import { MessageSkeleton } from "@/components/chat/MessageSkeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import type { UiMessage, ChatStatus } from "@/hooks/use-chat";
+import type { SourcePassage } from "@/lib/citations";
 
 interface MessageListProps {
   messages: UiMessage[];
   status: ChatStatus;
   error: string | null;
+  retryable: boolean;
+  onRetry: () => void;
+  onSelectPassage: (passage: SourcePassage) => void;
 }
 
-export function MessageList({ messages, status, error }: MessageListProps) {
+export function MessageList({
+  messages,
+  status,
+  error,
+  retryable,
+  onRetry,
+  onSelectPassage,
+}: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   // Follow the stream, but release if the reader scrolls up to re-read.
@@ -29,11 +43,7 @@ export function MessageList({ messages, status, error }: MessageListProps) {
   return (
     <div ref={containerRef} onScroll={onScroll} className="ledger-canvas min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 py-8">
-        {status === "loading" && (
-          <p className="text-center font-mono text-xs uppercase tracking-widest text-muted-foreground">
-            Loading…
-          </p>
-        )}
+        {status === "loading" && <MessageSkeleton />}
 
         {empty && (
           <p className="py-10 text-center font-serif text-lg text-muted-foreground">
@@ -42,16 +52,21 @@ export function MessageList({ messages, status, error }: MessageListProps) {
         )}
 
         {messages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+          <MessageItem key={message.id} message={message} onSelectPassage={onSelectPassage} />
         ))}
 
         {error && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertTitle>Couldn’t complete that</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+            {retryable && (
+              <div className="mt-2">
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                  Try again
+                </Button>
+              </div>
+            )}
+          </Alert>
         )}
 
         <div ref={endRef} />

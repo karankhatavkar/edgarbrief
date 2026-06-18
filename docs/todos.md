@@ -137,18 +137,16 @@ Goal: grounded answers with enforced citations — the core product contract.
 
 ---
 
-## Phase 7 — Chat persistence
+## Phase 7 — Trust UI (citations & source passages)
 
-**Goal:** chat threads and messages are durably stored in Supabase.
+**Goal:** analysts can verify every claim in one click — this is what makes the product usable.
 
-- [ ] Create `backend/app/database/chats.py`:
-  - `create_thread(admin_client, user_id, title) → ChatThread`
-  - `get_thread(client, thread_id, user_id) → ChatThread | None`
-  - `list_threads(client, user_id) → list[ChatThread]`
-  - `get_messages(client, thread_id) → list[ChatMessage]`
-  - `save_user_message(client, thread_id, content) → ChatMessage`
-  - `save_assistant_message(admin_client, thread_id, answer: GroundedAnswer) → ChatMessage` — saves message + citation rows
-- [ ] Write `backend/tests/database/test_chats.py` — unit tests with mocked Supabase client
+- [ ] Citation chips/links on assistant messages (company, filing type, date, page/section)
+- [ ] Source passage panel — show underlying excerpt for selected citation
+- [ ] Empty states (no threads, no corpus match)
+- [ ] Error states (auth expired, retrieval failure, grounding failure, network/CORS)
+- [ ] Loading/streaming status during assistant run
+- [ ] Verify: click a citation → see the exact passage from the filing
 
 ---
 

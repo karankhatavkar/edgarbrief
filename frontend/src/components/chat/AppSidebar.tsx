@@ -8,6 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { shortAgo } from "@/lib/format";
@@ -15,13 +16,14 @@ import type { Thread } from "@/lib/threads";
 
 interface AppSidebarProps {
   threads: Thread[];
+  loading: boolean;
   createThread: (title?: string) => Promise<Thread>;
   email: string | null;
   /** Present only inside the mobile drawer; renders a close control. */
   onClose?: () => void;
 }
 
-export function AppSidebar({ threads, createThread, email, onClose }: AppSidebarProps) {
+export function AppSidebar({ threads, loading, createThread, email, onClose }: AppSidebarProps) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
 
@@ -75,7 +77,13 @@ export function AppSidebar({ threads, createThread, email, onClose }: AppSidebar
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {threads.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col gap-1 px-1">
+            {[70, 55, 64].map((w, i) => (
+              <Skeleton key={i} className="h-8 rounded-md" style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        ) : threads.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">No briefs yet.</p>
         ) : (
           <ul className="flex flex-col gap-0.5">
