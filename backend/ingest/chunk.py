@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Budgets, in estimated tokens. Sized to the text-embedding-004 ~2,048-token
+# Budgets, in estimated tokens. Sized to the gemini-embedding-001 ~2,048-token
 # input cap with a wide safety margin; target/overlap tuned for retrieval
 # precision. See docs/architecture.md.
 TARGET_TOKENS = 512

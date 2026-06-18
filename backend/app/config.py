@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Google Gemini
     gemini_api_key: str
-    gemini_embedding_model: str = "text-embedding-004"
+    gemini_embedding_model: str = "gemini-embedding-001"
     gemini_embedding_dimensions: int = 768
 
     # Server — JSON-encoded list in env: '["https://app.example.com","http://localhost:5173"]'

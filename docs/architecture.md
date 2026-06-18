@@ -242,7 +242,7 @@ After conversion the ingest scripts:
 1. Read normalized Markdown files and the `manifest.json` filing metadata.
 2. Split each document into chunks with the heading-anchored, token-bounded strategy described below.
 3. Write one `source_documents` row per filing (ticker, filing type, date, accession number, normalized Markdown content).
-4. Embed each chunk with Gemini `text-embedding-004` (768 dimensions).
+4. Embed each chunk with Gemini `gemini-embedding-001` (768 dimensions).
 5. Write one `document_chunks` row per chunk (text, embedding vector, generated `tsvector`, and the chunk's typed metadata columns).
 6. Idempotent: skip documents that already have chunks.
 
@@ -254,7 +254,7 @@ The chunker is a small, owned module (no third-party text splitter — see the d
 
 **Why this shape.** A 10-K has a strong but shallow structure. After Stage 1 heading injection, every filing carries exactly the same skeleton: four `## PART I–IV` headings and ~22–30 `### Item N` headings, with **no deeper headings** — the sub-sections inside an Item (e.g. individual risk factors, "Macroeconomic and Industry Risks") are plain prose, not marked up. So `### Item` is the deepest reliable structural boundary. Item sizes also span four orders of magnitude in the same document: tiny stubs like *Item 1B. Unresolved Staff Comments* (~1 token) or *Item 4. Mine Safety Disclosures* (~16 tokens) sit beside *Item 1A. Risk Factors* (~12,900 tokens) and *Item 8. Financial Statements* (~19,300 tokens). Item 8 is dominated by large multi-column financial tables. Two naive approaches are therefore ruled out: one-chunk-per-Item is impossible because the largest Items dwarf the embedder's ~2,048-token input cap, and fixed-size windowing ignores the structure entirely — it splits tables mid-row (discarding the whole point of `convert.py`) and produces unusable citations.
 
-**Parameters** (tuned to the `text-embedding-004` input cap and retrieval precision):
+**Parameters** (tuned to the `gemini-embedding-001` input cap and retrieval precision):
 
 - Target ≈ **512 tokens**, hard max ≈ **800**, min ≈ **64** (so tiny Items stay whole rather than merging across boundaries).
 - Overlap ≈ one paragraph / ~80 tokens between adjacent prose chunks, so a thought split across a boundary is still retrievable. `read_surrounding_chunks` recovers wider context at query time.
@@ -275,7 +275,7 @@ The chunker is a small, owned module (no third-party text splitter — see the d
 
 EdgarBrief uses hybrid retrieval:
 
-1. Embed the user's query with the configured Gemini embedding model (`text-embedding-004`, 768 dimensions).
+1. Embed the user's query with the configured Gemini embedding model (`gemini-embedding-001`, 768 dimensions).
 2. Run a semantic search over `document_chunks.embedding` with `pgvector`.
 3. Run a lexical search over `document_chunks.search_vector` with Postgres full-text search.
 4. Fuse the two ranked lists in Python with Reciprocal Rank Fusion.

@@ -22,7 +22,7 @@ from app.database.models.document_chunk import DocumentChunk
 from app.database.models.source_document import SourceDocument
 from ingest.chunk import Chunk, chunk_markdown
 
-# text-embedding-004 accepts up to 100 instances per request.
+# gemini-embedding-001 accepts up to 100 instances per request.
 EMBED_BATCH = 100
 
 
