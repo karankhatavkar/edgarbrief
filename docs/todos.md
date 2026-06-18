@@ -92,7 +92,7 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 - [x] `ingest/` scripts (or CLI entrypoint) for one-off corpus loading
 - [x] HTML → normalized Markdown extraction (preserve page/section metadata)
-- [ ] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
+- [x] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
 - [ ] Write `source_documents` rows with filing metadata from `manifest.json`
 - [ ] Write `document_chunks` rows with text + metadata
 - [ ] Gemini embedding generation (`text-embedding-004`) → store `vector(768)` per chunk

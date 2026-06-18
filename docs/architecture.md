@@ -243,10 +243,10 @@ After conversion the ingest scripts:
 2. Split each document into chunks with the heading-anchored, token-bounded strategy described below.
 3. Write one `source_documents` row per filing (ticker, filing type, date, accession number, normalized Markdown content).
 4. Embed each chunk with Gemini `text-embedding-004` (768 dimensions).
-5. Write one `document_chunks` row per chunk (text, embedding vector, generated `tsvector`, metadata JSON).
-6. Idempotent: skip documents already present in Supabase.
+5. Write one `document_chunks` row per chunk (text, embedding vector, generated `tsvector`, and the chunk's typed metadata columns).
+6. Idempotent: skip documents that already have chunks.
 
-Chunk metadata JSON includes: `ticker`, `company`, `filing_type`, `filing_date`, `fiscal_year`, `accession_number`, `chunk_index`, `section` (from the nearest `##`/`###` heading), `token_count`, and source byte offsets into the Markdown. The section field is populated from the heading hierarchy that Stage 1 injected — without it, every chunk would have an empty section label.
+Metadata is **normalized across the two tables rather than denormalized into a per-chunk JSON blob.** Filing-grain metadata (`ticker`, `company`, `filing_type`, `filing_date`, `fiscal_year`, `accession_number`, …) lives once on `source_documents`; chunk-grain metadata lives in typed columns on `document_chunks`: `chunk_index`, `section` (the heading breadcrumb, e.g. `PART I > Item 1A. Risk Factors`), `page` (nullable — only filings that print page footers populate it), and `token_count`. A chunk reaches its filing metadata through the `document_id` foreign key. The `section` field comes from the heading hierarchy that Stage 1 injected — without it, every chunk would have an empty section label.
 
 #### Chunking strategy
 
@@ -357,16 +357,17 @@ Supabase tables should be small and product-oriented:
 `source_documents` stores the normalized Markdown version of each filing so the application can re-chunk, inspect, and cite the original extracted text without reaching back into downloaded HTML files. `document_chunks` stores retrieval-ready passages:
 
 - chunk ID
-- document ID
-- chunk index
-- page or section metadata
+- document ID (foreign key to `source_documents`, carrying all filing-grain metadata)
+- chunk index (stable per document; used to fetch neighbouring chunks)
+- section (heading breadcrumb) and page (nullable)
 - chunk text
 - embedding vector
 - generated `tsvector` for full-text search
 - token count
-- metadata JSON for ticker, company, filing type, filing date, year, accession number, page, section, and source offsets
 
-Hybrid retrieval runs two bounded queries against `document_chunks`: a semantic `pgvector` query and a Postgres full-text query. The backend fuses those ranked lists with Reciprocal Rank Fusion, then fetches the selected chunks and neighboring context for grounding.
+Filing-grain metadata (ticker, company, filing type, filing date, fiscal year, accession number) is not duplicated onto each chunk; it is read by joining `source_documents` on `document_id`. At corpus scale (tens of filings, a few thousand chunks) that join is cheap, and it keeps each fact in exactly one place.
+
+Hybrid retrieval runs two bounded queries against `document_chunks`: a semantic `pgvector` query and a Postgres full-text query. The backend fuses those ranked lists with Reciprocal Rank Fusion, then fetches the selected chunks and neighboring context for grounding. Filtered questions (e.g. "Apple's 2021–2025 10-Ks") restrict to the relevant `document_id`s — selected from `source_documents` by ticker/fiscal year — before or alongside the ranked queries.
 
 ## Schema Management
 
