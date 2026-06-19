@@ -113,8 +113,8 @@ Goal: a user question returns ranked, relevant source passages.
 - [x] `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
 - [x] `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
 - [x] Unit tests: fusion ranking, query assembly (mock DB)
-- [ ] Integration test (optional, `@pytest.mark.integration`): real query against ingested corpus — deferred
-- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks — deferred to Phase 8 (chat endpoint)
+- [ ] Integration test (optional, `@pytest.mark.integration`): real query against ingested corpus — deferred (covered manually by the Phase 8 smoke harness, `backend/scripts/smoke_questions.py`)
+- [x] Verify: test queries from [brief](brief.md) return relevant chunks — confirmed via Phase 8 smoke test (9/10 grounded with on-topic citations)
 
 ---
 
@@ -130,10 +130,10 @@ Goal: grounded answers with enforced citations — the core product contract.
 - [x] `chat/streaming.py` — AI SDK-compatible stream (text deltas + citation metadata parts)
 - [x] Persist `message_citations` linked to assistant messages
 - [x] Unit tests: citation validation, grounding enforcement, streaming frames, orchestrator
-- [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions) — deferred (needs live Gemini + Supabase):
-  - [ ] Answers cite specific filings and pages
-  - [ ] Under-specified questions get "not enough evidence" responses
-  - [ ] Question 10 (generative AI margins) refuses to infer beyond filings
+- [x] Verify against [brief example questions](brief.md#example-analyst-questions) — done via Phase 8 smoke test ([pilot-readiness](pilot-readiness.md)):
+  - [x] Answers cite specific filings (and pages where ingested — many chunks lack page metadata)
+  - [ ] Under-specified questions get "not enough evidence" responses — refusal path confirmed via Q10, but a dedicated under-specified query was not smoke-tested
+  - [x] Question 10 (generative AI margins) refuses to infer beyond filings
 
 ---
 
@@ -154,13 +154,13 @@ Goal: grounded answers with enforced citations — the core product contract.
 
 **Goal:** 5 senior analysts can use it for a week and report ≥3 hours saved per analyst per week.
 
-- [ ] README "Running locally" section — copy-paste commands for backend + frontend + env vars
-- [ ] Seed or document how to ingest/update the corpus
-- [ ] Smoke-test all 10 example questions from the client brief
-- [ ] Confirm chat history persists across sessions
-- [ ] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts)
-- [ ] Basic structured logging on backend (`structlog`) for debugging failed turns
-- [ ] Review latency: streaming starts within a few seconds for typical queries
+- [x] README "Running locally" section — copy-paste commands for backend + frontend + env vars
+- [x] Seed or document how to ingest/update the corpus
+- [x] Smoke-test all 10 example questions from the client brief — 9/10 grounded; Q6 (5-company sweep) is a known limitation. See [pilot-readiness](pilot-readiness.md).
+- [x] Confirm chat history persists across sessions — live persist→reload round-trip verified
+- [x] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts) — audited, see [pilot-readiness](pilot-readiness.md)
+- [x] Basic structured logging on backend (`structlog`) for debugging failed turns
+- [x] Review latency: streaming starts within a few seconds for typical queries — **not met**: TTFT is 13–80s by design (grounding before streaming). Documented as a known limitation in [pilot-readiness](pilot-readiness.md).
 
 ---
 
@@ -208,9 +208,12 @@ cd backend && uv run pytest -m "not integration"
 cd backend && uv run pytest -m integration   # needs live creds
 ```
 
-**Run ingest pipeline:**
+**Run ingest pipeline** (four idempotent steps; download/convert from repo root, load/chunk from `backend/`):
 ```bash
-cd backend && uv run python -m ingest.run
+uv run data/download.py                          # 1. fetch 10-Ks from SEC EDGAR (edit USER_AGENT first)
+uv run data/convert.py                           # 2. HTM -> Markdown
+cd backend && uv run python ingest/load_source_documents.py  # 3. load source_documents
+uv run python ingest/chunk_documents.py          # 4. chunk + embed into document_chunks
 ```
 
 **Type-check frontend:**

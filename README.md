@@ -49,20 +49,75 @@ You also need accounts/keys for external services once the app is wired up. Star
 
 ## Running locally
 
-To be added during the build. Setup guides:
+You need a [Supabase](docs/guides/supabase-setup.md) project and a
+[Gemini API key](https://aistudio.google.com/app/apikey) first. Detailed setup
+guides: [Supabase](docs/guides/supabase-setup.md) ·
+[Backend](docs/guides/backend-setup.md) · [Frontend](docs/guides/frontend-setup.md).
 
-- [Supabase](docs/guides/supabase-setup.md) — account, hosted project (dashboard or CLI)
-- [Backend](docs/guides/backend-setup.md)
-- [Frontend](docs/guides/frontend-setup.md)
-
-## Sample SEC data
-
-Use the standalone downloader to fetch a small local 10-K sample from SEC EDGAR.
-Edit the params at the top of `data/download.py`, especially `USER_AGENT`, then run:
+### 1. Backend
 
 ```bash
-uv run data/download.py
+cd backend
+uv sync                              # install dependencies
+cp .env.example .env                 # then fill in the values (table below)
+uv run alembic upgrade head          # create the schema (uses direct DATABASE_URL)
+uv run uvicorn app.main:app --reload # serves http://localhost:8000
 ```
 
-By default this downloads the latest 5 10-K filings for AAPL, MSFT, NVDA, AMZN, and GOOGL into year folders under `data/downloads/` and writes a `manifest.json`.
-Downloaded files are gitignored; the `data/` folder itself stays in git for the script and notes.
+Backend env vars (`backend/.env`) — all required unless noted; the service fails
+fast on startup if a required one is missing:
+
+| Var | What it is |
+| --- | ---------- |
+| `SUPABASE_URL` | Project URL (`https://<ref>.supabase.co`) |
+| `SUPABASE_ANON_KEY` | Public anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret service-role key (backend-only writes) |
+| `DATABASE_URL` | **Direct** Postgres connection (not the pooler) — used by Alembic + the app |
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `GEMINI_CHAT_MODEL` | Optional, default `gemini-2.5-flash-lite` |
+| `GEMINI_EMBEDDING_MODEL` | Optional, default `gemini-embedding-001` |
+| `GEMINI_EMBEDDING_DIMENSIONS` | Optional, default `768` |
+| `ALLOWED_ORIGINS` | JSON list of CORS origins, default `["http://localhost:5173"]` |
+| `LOG_LEVEL` | Optional, default `INFO` |
+| `LOG_JSON` | Optional, default `false`; set `true` in prod for JSON logs |
+
+### 2. Frontend
+
+```bash
+cd frontend
+cp .env.example .env   # then fill in the values (table below)
+pnpm install
+pnpm dev               # serves http://localhost:5173
+```
+
+Frontend env vars (`frontend/.env`) — only browser-safe public values:
+
+| Var | What it is |
+| --- | ---------- |
+| `VITE_API_BASE_URL` | Backend URL, e.g. `http://localhost:8000` |
+| `VITE_SUPABASE_URL` | Same as backend `SUPABASE_URL` |
+| `VITE_SUPABASE_ANON_KEY` | Same as backend `SUPABASE_ANON_KEY` |
+
+### 3. Seed the corpus
+
+The corpus is loaded by four idempotent steps — re-running skips anything already
+downloaded, converted, or ingested. Run the first two from the repo root, the last
+two from `backend/`:
+
+```bash
+# 1. Download 10-Ks from SEC EDGAR (edit USER_AGENT at the top of the script first)
+uv run data/download.py
+# 2. Convert the filings HTM -> Markdown (see data/README.md for the pipeline)
+uv run data/convert.py
+
+cd backend
+# 3. Load filings into source_documents
+uv run python ingest/load_source_documents.py
+# 4. Chunk + embed into document_chunks (calls Gemini; needs GEMINI_API_KEY)
+uv run python ingest/chunk_documents.py
+```
+
+By default this loads the latest 5 10-K filings each for AAPL, MSFT, NVDA, AMZN, and
+GOOGL (25 filings). Downloaded/converted payloads are gitignored; the `data/` folder
+itself stays in git for the scripts and notes. See [data/README.md](data/README.md)
+for the HTM→Markdown conversion details.

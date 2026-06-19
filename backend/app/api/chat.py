@@ -5,6 +5,7 @@ POST /chat/stream — AI SDK data-stream of one assistant turn (stub in Phase 3)
 
 import uuid
 
+import structlog
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -31,6 +32,7 @@ class StreamRequest(BaseModel):
 @router.post("/stream")
 async def chat_stream(body: StreamRequest, client: UserClientDep) -> StreamingResponse:
     await require_owned_thread(client, body.thread_id)
+    structlog.contextvars.bind_contextvars(thread_id=str(body.thread_id))
 
     user_messages = [m for m in body.messages if m.role == "user"]
     if not user_messages:

@@ -6,9 +6,11 @@ citations are already verified. A grounding or model failure therefore yields a
 controlled error part instead of a polished-but-unsupported answer.
 """
 
+import time
 import uuid
 from collections.abc import AsyncGenerator
 
+import structlog
 from pydantic_ai import UnexpectedModelBehavior
 from supabase import AsyncClient
 
@@ -25,6 +27,8 @@ from app.chat.streaming import (
 from app.database import threads as thread_db
 from app.database.session import async_session
 
+log = structlog.get_logger(__name__)
+
 
 async def run_chat_turn(
     svc: AsyncClient, thread_id: uuid.UUID, question: str
@@ -34,12 +38,25 @@ async def run_chat_turn(
     The user message is persisted by the route before this runs; this persists
     the assistant message and its citations after the stream completes.
     """
+    turn_log = log.bind(thread_id=str(thread_id))
+    turn_log.info("turn.started")
+    start = time.perf_counter()
+
     deps = DocumentAgentDeps(session_factory=async_session)
     try:
         result = await agent.run(question, deps=deps)
     except UnexpectedModelBehavior:
         # Retries exhausted (grounding couldn't be satisfied) — fail closed.
+        turn_log.warning("turn.grounding_failed", retrieved=len(deps.retrieved))
         yield error_part("Could not produce a grounded answer for this question.")
+        yield finish_frame()
+        return
+    except Exception:
+        # Retrieval/LLM/DB failure inside the run. We've already sent stream
+        # headers, so a raised exception would corrupt the AI-SDK wire protocol:
+        # degrade to a controlled error part instead of leaking a 500 mid-stream.
+        turn_log.exception("turn.failed", retrieved=len(deps.retrieved))
+        yield error_part("Something went wrong while answering. Please try again.")
         yield finish_frame()
         return
 
@@ -62,6 +79,18 @@ async def run_chat_turn(
         }
         for citation in grounded.citations
     ]
-    await thread_db.save_assistant_message(
-        svc, thread_id, grounded.answer, citation_rows
+    try:
+        await thread_db.save_assistant_message(
+            svc, thread_id, grounded.answer, citation_rows
+        )
+    except Exception:
+        # The stream already finished, so we can't surface this to the client —
+        # log it so a dropped assistant message is debuggable, not silent.
+        turn_log.exception("turn.persist_failed")
+        return
+
+    turn_log.info(
+        "turn.completed",
+        citations=len(grounded.citations),
+        duration_ms=round((time.perf_counter() - start) * 1000, 1),
     )

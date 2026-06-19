@@ -29,5 +29,9 @@ class Settings(BaseSettings):
     # Server — JSON-encoded list in env: '["https://app.example.com","http://localhost:5173"]'
     allowed_origins: list[str] = ["http://localhost:5173"]
 
+    # Logging
+    log_level: str = "INFO"
+    log_json: bool = False  # set True in prod for machine-parseable logs
+
 
 settings = Settings()

@@ -10,6 +10,7 @@ import uuid
 from types import SimpleNamespace
 
 from pydantic_ai.models.test import TestModel
+from structlog.testing import capture_logs
 
 import app.assistant.agent as agent_mod
 from app.assistant.agent import agent
@@ -97,3 +98,25 @@ def test_run_chat_turn_grounding_failure_emits_error_and_skips_persist(
     assert any(line.startswith("3:") for line in lines)  # error part
     assert lines[-1].startswith("d:")
     assert called["save"] is False
+
+
+def test_run_chat_turn_unexpected_failure_degrades_and_logs(monkeypatch):
+    """A retrieval/LLM/DB error mid-run must not leak a 500 or drop silently."""
+    called = {"save": False}
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("gemini exploded")
+
+    async def fake_save(*args, **kwargs):
+        called["save"] = True
+
+    monkeypatch.setattr(orchestrator, "agent", SimpleNamespace(run=boom))
+    monkeypatch.setattr(orchestrator.thread_db, "save_assistant_message", fake_save)
+
+    with capture_logs() as logs:
+        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+
+    assert any(line.startswith("3:") for line in lines)  # graceful error part
+    assert lines[-1].startswith("d:")  # finish frame, not a raised exception
+    assert called["save"] is False
+    assert any(entry["event"] == "turn.failed" for entry in logs)
