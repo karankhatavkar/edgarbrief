@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   PencilEdit02Icon,
   Logout03Icon,
@@ -25,10 +25,19 @@ interface AppSidebarProps {
 
 export function AppSidebar({ threads, loading, createThread, email, onClose }: AppSidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [creating, setCreating] = useState(false);
 
   async function newBrief() {
     if (creating) return;
+
+    // Already on a brand-new, unsent thread — don't create a duplicate.
+    const match = location.pathname.match(/^\/c\/([\w-]+)$/);
+    if (match) {
+      const current = threads.find((t) => t.id === match[1]);
+      if (current?.title === "New Chat") return;
+    }
+
     setCreating(true);
     try {
       const thread = await createThread();
