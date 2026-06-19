@@ -4,7 +4,7 @@ Collected observations from manual testing. Each item includes the problem, desi
 
 ---
 
-## [ ] 1. Markdown Rendering for LLM Output
+## [x] 1. Markdown Rendering for LLM Output
 
 **Observation:** LLM responses are returned as raw markdown strings but are rendered as plain text in the chat window.
 
@@ -73,7 +73,7 @@ Collected observations from manual testing. Each item includes the problem, desi
 
 ---
 
-## [ ] 6. Markdown Rendering for Citation Document Preview
+## [x] 6. Markdown Rendering for Citation Document Preview
 
 **Observation:** When a citation/source document is surfaced in the citations panel, its content is displayed as raw text without any formatting.
 

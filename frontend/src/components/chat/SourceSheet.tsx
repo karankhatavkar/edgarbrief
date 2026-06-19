@@ -1,6 +1,7 @@
 import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/chat/Markdown";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
@@ -43,9 +44,9 @@ export function SourceSheet({ passage, onClose }: SourceSheetProps) {
             </SheetHeader>
 
             <ScrollArea className="min-h-0 flex-1">
-              <blockquote className="whitespace-pre-wrap break-words border-l-2 border-border px-6 py-6 font-serif text-[15px] leading-[1.7] text-foreground">
-                {passage.excerpt}
-              </blockquote>
+              <div className="px-6 py-6">
+                <Markdown className="text-[15px]">{passage.excerpt}</Markdown>
+              </div>
             </ScrollArea>
 
             <SheetFooter className="border-t">

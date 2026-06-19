@@ -1,6 +1,7 @@
 import { LegalDocument01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/icon";
 import { CitationChips } from "@/components/chat/CitationChips";
+import { Markdown } from "@/components/chat/Markdown";
 import type { UiMessage } from "@/hooks/use-chat";
 import type { SourcePassage } from "@/lib/citations";
 
@@ -45,10 +46,8 @@ export function MessageItem({ message, onSelectPassage }: MessageItemProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <p className="whitespace-pre-wrap break-words font-serif text-[16px] leading-[1.7] text-foreground">
-              {message.content}
-              {message.streaming && <span className="stream-caret align-baseline" aria-hidden />}
-            </p>
+            <Markdown>{message.content}</Markdown>
+            {message.streaming && <span className="stream-caret" aria-hidden />}
             <CitationChips passages={message.citations ?? []} onSelect={onSelectPassage} />
           </div>
         )}

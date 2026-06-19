@@ -112,21 +112,24 @@ export function AppSidebar({ threads, loading, createThread, email, onClose }: A
         )}
       </nav>
 
-      <div className="mt-auto flex items-center gap-2 border-t px-3 py-3">
-        <div className="flex size-7 items-center justify-center rounded-full bg-muted font-mono text-[11px] uppercase text-muted-foreground">
-          {(email ?? "?").slice(0, 1)}
+      <div className="mt-auto border-t px-3 py-3">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-full bg-muted font-mono text-[11px] uppercase text-muted-foreground">
+            {(email ?? "?").slice(0, 1)}
+          </div>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+            {email ?? "Signed in"}
+          </span>
         </div>
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-          {email ?? "Signed in"}
-        </span>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => supabase.auth.signOut()}
-          aria-label="Sign out"
-          title="Sign out"
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+          className="w-full justify-start gap-2 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
         >
-          <Icon icon={Logout03Icon} size={17} />
-        </button>
+          <Icon icon={Logout03Icon} size={15} />
+          Log out
+        </Button>
       </div>
     </div>
   );
