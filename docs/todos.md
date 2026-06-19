@@ -141,207 +141,37 @@ Goal: grounded answers with enforced citations — the core product contract.
 
 **Goal:** analysts can verify every claim in one click — this is what makes the product usable.
 
-- [ ] Citation chips/links on assistant messages (company, filing type, date, page/section)
-- [ ] Source passage panel — show underlying excerpt for selected citation
-- [ ] Empty states (no threads, no corpus match)
-- [ ] Error states (auth expired, retrieval failure, grounding failure, network/CORS)
-- [ ] Loading/streaming status during assistant run
-- [ ] Verify: click a citation → see the exact passage from the filing
+- [x] Citation chips/links on assistant messages (company, filing type, date, page/section)
+- [x] Source passage panel — show underlying excerpt for selected citation
+- [x] Empty states (no threads, no corpus match)
+- [x] Error states (auth expired, retrieval failure, grounding failure, network/CORS)
+- [x] Loading/streaming status during assistant run
+- [x] Verify: click a citation → see the exact passage from the filing
 
 ---
 
-## Phase 8 — Chat streaming endpoint
+## Phase 8 — Pilot readiness
 
-**Goal:** `POST /chat/stream` receives a user message, runs the full RAG turn, and streams the answer back in AI SDK wire format.
+**Goal:** 5 senior analysts can use it for a week and report ≥3 hours saved per analyst per week.
 
-- [ ] Create `backend/app/chat/messages.py` — convert AI SDK UI message format ↔ internal `ChatMessage` Pydantic models
-- [ ] Create `backend/app/chat/streaming.py` — async generator that emits AI SDK SSE events:
-  - `0:"text delta"` — partial text as it streams
-  - `8:[{citation}]` — citation/source metadata parts once available
-  - `3:"error message"` — on auth failure, grounding failure, LLM error
-  - `d:{finishReason, usage}` — finish event
-- [ ] Create `backend/app/chat/orchestrator.py` — `run_chat_turn(user, thread_id, messages, retriever, validator)`:
-  1. Verify thread belongs to user
-  2. Retrieve relevant passages
-  3. Run PydanticAI agent
-  4. Validate grounding
-  5. Stream answer
-  6. Persist messages and citations
-- [ ] Create `backend/app/api/chat.py`:
-  - `POST /chat/stream` — authenticated, calls orchestrator, returns `StreamingResponse` with `text/event-stream`
-  - `GET /threads` — list user's threads
-  - `POST /threads` — create new thread
-  - `GET /threads/{thread_id}/messages` — load message history for a thread
-- [ ] Wire all routers into `main.py`
-- [ ] Manual test with curl: `curl -N -X POST http://localhost:8000/chat/stream -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"threadId":"...","messages":[{"role":"user","content":"What was Apple revenue in 2024?"}]}'`
-- [ ] Verify SSE stream arrives and contains text deltas + citation parts
+- [ ] README "Running locally" section — copy-paste commands for backend + frontend + env vars
+- [ ] Seed or document how to ingest/update the corpus
+- [ ] Smoke-test all 10 example questions from the client brief
+- [ ] Confirm chat history persists across sessions
+- [ ] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts)
+- [ ] Basic structured logging on backend (`structlog`) for debugging failed turns
+- [ ] Review latency: streaming starts within a few seconds for typical queries
 
 ---
 
-## Phase 8 — Frontend scaffold
+## Phase 9 — Deployment (Railway)
 
-**Goal:** Vite React TypeScript SPA boots, config validated, router in place.
-
-- [ ] Initialize Vite project: `pnpm create vite frontend --template react-ts` (if not already done)
-- [ ] Install deps:
-  - `pnpm add react-router-dom @supabase/supabase-js`
-  - `pnpm add ai @ai-sdk/react` (Vercel AI SDK)
-  - `pnpm add tailwindcss @tailwindcss/vite`
-  - `pnpm dlx shadcn@latest init`
-- [ ] Add shadcn primitives needed: `pnpm dlx shadcn@latest add button input card scroll-area separator`
-- [ ] Set up Tailwind: `tailwind.config.ts`, `src/index.css` with Tailwind directives + CSS variables for shadcn theme
-- [ ] Create `frontend/src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` at module load; throw if missing
-- [ ] Create `frontend/src/lib/supabase.ts` — single `createClient` call using env vars
-- [ ] Create `frontend/src/lib/http.ts` — `apiFetch(path, options)` wrapper:
-  - Prepends `env.VITE_API_BASE_URL`
-  - Injects `Authorization: Bearer <supabase_access_token>` automatically
-  - 30s timeout via `AbortController`
-  - On non-OK response: throws typed `ApiError { status, message, isNetworkError }`
-- [ ] Create `frontend/src/lib/api.ts` — product API calls:
-  - `listThreads() → Thread[]`
-  - `createThread(title: string) → Thread`
-  - `getMessages(threadId: string) → Message[]`
-- [ ] Create `frontend/src/App.tsx` — React Router routes:
-  - `/login` → `LoginPage`
-  - `/signup` → `SignupPage`
-  - `/` → `ChatPage` (protected)
-  - `/thread/:threadId` → `ChatPage` (protected)
-- [ ] Confirm `pnpm dev` starts without errors and routes render
-
----
-
-## Phase 9 — Frontend auth
-
-**Goal:** user can sign up, log in, and be redirected to the chat. Unauthenticated routes redirect to `/login`.
-
-- [ ] Create `frontend/src/lib/auth.ts` — `useSession()` hook that subscribes to `supabase.auth.onAuthStateChange` and returns `{ session, loading }`
-- [ ] Create `frontend/src/components/ProtectedRoute.tsx` — if `loading` show spinner; if no session redirect to `/login`; otherwise render children
-- [ ] Create `frontend/src/pages/auth/LoginPage.tsx`:
-  - Email + password form
-  - `supabase.auth.signInWithPassword()`
-  - On success: navigate to `/`
-  - On error: show inline error message
-- [ ] Create `frontend/src/pages/auth/SignupPage.tsx`:
-  - Email + password + confirm password form
-  - `supabase.auth.signUp()`
-  - On success: navigate to `/` (or show "check your email" if confirmation is enabled)
-- [ ] Add sign-out button (calls `supabase.auth.signOut()`, redirects to `/login`)
-- [ ] Manual test: sign up → receive session → see chat page; sign out → redirected to login; try accessing `/` without auth → redirected to login
-
----
-
-## Phase 10 — Frontend chat UI
-
-**Goal:** user can start a thread, ask a question, and see a streamed grounded answer.
-
-- [ ] Create `frontend/src/pages/chat/ChatPage.tsx`:
-  - Left sidebar: list of threads (from `api.listThreads()`) + "New chat" button
-  - Main area: `<ChatWindow>` for the selected thread (or empty state if no thread selected)
-- [ ] Create `frontend/src/components/chat/ChatWindow.tsx`:
-  - Initialize `useChat` from `@ai-sdk/react` with:
-    ```ts
-    transport: new DefaultChatTransport({
-      api: `${env.VITE_API_BASE_URL}/chat/stream`,
-      headers: async () => ({
-        Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-      }),
-    })
-    ```
-  - Fetch prior messages via `api.getMessages(threadId)` and pass as `initialMessages`
-  - Render `<MessageBubble>` for each message
-  - `<ChatInput>` at the bottom with send button
-- [ ] Create `frontend/src/components/chat/MessageBubble.tsx` — render user vs assistant messages; assistant messages: Markdown-rendered text + citation cards below
-- [ ] Create `frontend/src/components/chat/ChatInput.tsx` — textarea (Shift+Enter for newline, Enter to send), disabled while streaming, shows spinner during `status === 'streaming'`
-- [ ] Handle new thread creation: "New chat" → `api.createThread("New chat")` → navigate to `/thread/:id`
-- [ ] Auto-update thread title from first user message (PATCH `/threads/:id` with first 60 chars of query)
-- [ ] Manual test: ask "What was Apple revenue in 2024?" — verify streamed text appears incrementally
-
----
-
-## Phase 12 — Citation & source passage UI
-
-**Goal:** analyst can see exactly which filing passages back each claim.
-
-- [ ] Parse citation data parts from AI SDK stream (the `8:` event type carries structured citation JSON)
-- [ ] Create `frontend/src/components/chat/CitationCard.tsx`:
-  - Shows: company name, filing type + date, page/section
-  - Clicking expands to show excerpt text
-  - Styled to look like a footnote reference (numbered superscript inline in answer text)
-- [ ] Create `frontend/src/components/chat/SourcePanel.tsx`:
-  - Collapsible sidebar or inline panel listing all citations for the current message
-  - Each citation: company, filing, date, section, full excerpt
-- [ ] Inline superscript citation numbers in `MessageBubble` (e.g., `[1]`, `[2]`) linked to their `CitationCard`
-- [ ] Manual test: verify citation cards show correct metadata and excerpt from actual filing
-
----
-
-## Phase 13 — Error states & empty states
-
-**Goal:** every failure mode has a clear, friendly UI response.
-
-- [ ] Auth errors (401 from backend) → clear session, redirect to `/login` with "Session expired" message
-- [ ] Forbidden (403) → show "You don't have access to this thread"
-- [ ] Grounding failure (backend returns error event) → show "The corpus doesn't contain enough evidence to answer this question" in the chat
-- [ ] LLM / Supabase errors (502, 500) → show "Something went wrong — please try again" with retry button
-- [ ] Network error (`isNetworkError` flag) → show "Connection lost — check your network"
-- [ ] Empty chat state (no threads) → show example analyst questions from `brief.md` as prompt chips
-- [ ] Loading skeleton for thread list and message history (shimmer placeholder)
-- [ ] Message streaming: show typing indicator while `status === 'streaming'`
-
----
-
-## Phase 14 — Backend tests & hardening
-
-**Goal:** all critical paths are covered by tests; the suite is fast and runs without network by default.
-
-- [ ] `pytest -m "not integration"` passes with no network/DB calls
-- [ ] Tests exist for:
-  - Auth dependency (mocked Supabase)
-  - Grounding validator (pure Python)
-  - RRF fusion (pure Python)
-  - Chunking logic (pure Python)
-  - HTML → Markdown extraction (pure Python)
-  - Chat persistence helpers (mocked Supabase client)
-  - Streaming event format (unit test the event serialization)
-- [ ] Integration tests (marked `@pytest.mark.integration`) cover:
-  - Retrieval against live Supabase
-  - Full chat turn against live Gemini + Supabase
-- [ ] `ruff check backend/` passes with no errors
-- [ ] `ruff format backend/` applied
-
----
-
-## Phase 15 — Frontend quality
-
-- [ ] `pnpm tsc --noEmit` passes with no errors (strict mode)
-- [ ] `pnpm lint` (ESLint) passes with no errors
-- [ ] Manual regression test on golden path:
-  1. Sign up with a new email
-  2. Start a new chat thread
-  3. Ask: "Across Apple's 2021–2025 10-Ks, how did the revenue mix between iPhone, Services, Mac, iPad, and Wearables change?"
-  4. Verify: streamed answer appears, citations display correct company/filing/section, clicking a citation shows the excerpt
-  5. Refresh the page — prior messages load from Supabase
-  6. Sign out → redirected to login
-
----
-
-## Phase 16 — Railway deployment
-
-**Goal:** production app running on Railway, accessible from browser, backed by Supabase.
-
-- [ ] Create Railway project with two services: `backend` and `frontend`
-- [ ] Backend service:
-  - Root: `backend/`
-  - Build command: `uv sync`
-  - Start command: `uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-  - Set all env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `GEMINI_API_KEY`, `GEMINI_EMBEDDING_MODEL`, `GEMINI_EMBEDDING_DIMENSIONS`, `ALLOWED_ORIGINS` (Railway frontend domain)
-- [ ] Frontend service:
-  - Root: `frontend/`
-  - Build command: `pnpm install && pnpm build`
-  - Start: serve `dist/` as static site
-  - Set env vars: `VITE_API_BASE_URL` (Railway backend domain), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [ ] Add Railway backend domain to Supabase Auth → allowed redirect URLs
-- [ ] End-to-end production smoke test: open Railway frontend URL, log in, ask a question, verify answer + citations
+- [ ] Railway: backend service (Uvicorn, env vars, `ALLOWED_ORIGINS`)
+- [ ] Railway: frontend service (Vite build, `VITE_*` env vars at build time)
+- [ ] Supabase: re-enable email confirmation for production if disabled during dev
+- [ ] Run `alembic upgrade head` against production Supabase (direct connection)
+- [ ] Run ingestion against production database
+- [ ] End-to-end test on deployed URLs with a real Driftwood-style email account
 
 ---
 
