@@ -47,7 +47,7 @@ Collected observations from manual testing. Each item includes the problem, desi
 
 ---
 
-## [ ] 4. Adjustable Side Panel Width
+## [x] 4. Adjustable Side Panel Width
 
 **Observation:** The side panel (chat list / navigation) has a fixed width with no way for the user to resize it.
 
@@ -60,7 +60,7 @@ Collected observations from manual testing. Each item includes the problem, desi
 
 ---
 
-## [ ] 5. Logout Button Is Not Clearly Labeled
+## [x] 5. Logout Button Is Not Clearly Labeled
 
 **Observation:** The logout action is represented only by an icon with no label, making it unclear to users — especially new ones.
 

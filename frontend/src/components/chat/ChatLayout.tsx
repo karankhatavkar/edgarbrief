@@ -4,6 +4,17 @@ import { AppSidebar } from "@/components/chat/AppSidebar";
 import { useSession } from "@/lib/auth";
 import { listThreads, createThread as createThreadApi, type Thread } from "@/lib/threads";
 
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 400;
+const SIDEBAR_DEFAULT = 288;
+
+function getSavedSidebarWidth(): number {
+  const saved = localStorage.getItem("sidebar-width");
+  if (!saved) return SIDEBAR_DEFAULT;
+  const n = parseInt(saved, 10);
+  return Number.isFinite(n) ? Math.min(Math.max(n, SIDEBAR_MIN), SIDEBAR_MAX) : SIDEBAR_DEFAULT;
+}
+
 /** Shared state handed to chat routes through React Router's outlet context. */
 export interface ChatOutletContext {
   threads: Thread[];
@@ -25,6 +36,33 @@ export function ChatLayout() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(getSavedSidebarWidth);
+
+  function handleResizeStart(e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    let currentWidth = startWidth;
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function onMove(ev: MouseEvent) {
+      currentWidth = Math.min(Math.max(startWidth + ev.clientX - startX, SIDEBAR_MIN), SIDEBAR_MAX);
+      setSidebarWidth(currentWidth);
+    }
+
+    function onUp() {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      localStorage.setItem("sidebar-width", String(currentWidth));
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
 
   const refreshThreads = useCallback(async () => {
     setThreads(await loadThreads());
@@ -60,12 +98,20 @@ export function ChatLayout() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <aside className="hidden w-72 shrink-0 border-r md:flex">
+      <aside
+        className="relative hidden shrink-0 border-r md:flex"
+        style={{ width: sidebarWidth }}
+      >
         <AppSidebar
           threads={threads}
           loading={loadingThreads}
           createThread={createThread}
           email={email}
+        />
+        <div
+          onMouseDown={handleResizeStart}
+          aria-hidden
+          className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50"
         />
       </aside>
 
