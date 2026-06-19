@@ -58,7 +58,8 @@ async def search_filings(
 
     Returns ranked passages, best first. Cite results by their `chunk_id`.
     """
-    passages = await retrieve(ctx.deps.session, query)
+    async with ctx.deps.session_factory() as session:
+        passages = await retrieve(session, query)
     return [_show(ctx.deps, p.chunk) for p in passages]
 
 
@@ -67,7 +68,8 @@ async def read_chunk(
     ctx: RunContext[DocumentAgentDeps], chunk_id: str
 ) -> PassageView | str:
     """Re-read a single passage by its `chunk_id`."""
-    chunk = await get_chunk_by_id(ctx.deps.session, _parse_chunk_id(chunk_id))
+    async with ctx.deps.session_factory() as session:
+        chunk = await get_chunk_by_id(session, _parse_chunk_id(chunk_id))
     if chunk is None:
         return f"No passage found with chunk_id {chunk_id}."
     return _show(ctx.deps, chunk)
@@ -78,10 +80,11 @@ async def read_surrounding_chunks(
     ctx: RunContext[DocumentAgentDeps], chunk_id: str
 ) -> list[PassageView]:
     """Read the passages immediately before and after `chunk_id` for context."""
-    chunk = await get_chunk_by_id(ctx.deps.session, _parse_chunk_id(chunk_id))
-    if chunk is None:
-        return []
-    neighbors = await fetch_neighbors(ctx.deps.session, [chunk], window=1)
+    async with ctx.deps.session_factory() as session:
+        chunk = await get_chunk_by_id(session, _parse_chunk_id(chunk_id))
+        if chunk is None:
+            return []
+        neighbors = await fetch_neighbors(session, [chunk], window=1)
     ordered = sorted(neighbors, key=lambda c: c.chunk_index)
     return [_show(ctx.deps, n) for n in ordered]
 

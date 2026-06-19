@@ -36,10 +36,18 @@ def _scripted_model(cited_chunk_id: uuid.UUID) -> TestModel:
     )
 
 
+class _FakeSessionCtx:
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *exc):
+        return False
+
+
 def test_agent_accepts_grounded_citation(monkeypatch, make_chunk):
     chunk = make_chunk()
     _stub_retrieve(monkeypatch, chunk)
-    deps = DocumentAgentDeps(session=None)
+    deps = DocumentAgentDeps(session_factory=lambda: _FakeSessionCtx())
 
     with agent.override(model=_scripted_model(chunk.id)):
         result = agent.run_sync("How did Apple do?", deps=deps)
@@ -51,7 +59,7 @@ def test_agent_accepts_grounded_citation(monkeypatch, make_chunk):
 def test_agent_rejects_ungrounded_citation(monkeypatch, make_chunk):
     chunk = make_chunk()
     _stub_retrieve(monkeypatch, chunk)
-    deps = DocumentAgentDeps(session=None)
+    deps = DocumentAgentDeps(session_factory=lambda: _FakeSessionCtx())
 
     # Cite a chunk that was never retrieved this turn -> fail closed.
     with agent.override(model=_scripted_model(uuid.uuid4())):

@@ -34,19 +34,16 @@ async def run_chat_turn(
     The user message is persisted by the route before this runs; this persists
     the assistant message and its citations after the stream completes.
     """
-    async with async_session() as session:
-        deps = DocumentAgentDeps(session=session)
-        try:
-            result = await agent.run(question, deps=deps)
-        except UnexpectedModelBehavior:
-            # Retries exhausted (grounding couldn't be satisfied) — fail closed.
-            yield error_part(
-                "Could not produce a grounded answer for this question."
-            )
-            yield finish_frame()
-            return
+    deps = DocumentAgentDeps(session_factory=async_session)
+    try:
+        result = await agent.run(question, deps=deps)
+    except UnexpectedModelBehavior:
+        # Retries exhausted (grounding couldn't be satisfied) — fail closed.
+        yield error_part("Could not produce a grounded answer for this question.")
+        yield finish_frame()
+        return
 
-        grounded = build_grounded_answer(result.output, deps.retrieved)
+    grounded = build_grounded_answer(result.output, deps.retrieved)
 
     for token in answer_deltas(grounded.answer):
         yield text_chunk(token)
