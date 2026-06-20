@@ -24,10 +24,36 @@ from app.chat.streaming import (
     finish_frame,
     text_chunk,
 )
+from app.chat.titling import generate_thread_title
 from app.database import threads as thread_db
 from app.database.session import async_session
 
 log = structlog.get_logger(__name__)
+
+
+async def _title_first_turn(
+    svc: AsyncClient,
+    thread_id: uuid.UUID,
+    question: str,
+    answer: str,
+    turn_log: structlog.BoundLogger,
+) -> None:
+    """Name the thread from its opening exchange, once, best-effort.
+
+    Runs after persistence and after the stream has finished, so a failure here
+    can't affect the answer the user already received — we just keep the
+    provisional title the thread was created with.
+    """
+    try:
+        # One user + one assistant message means this was the first turn.
+        if await thread_db.count_messages(svc, thread_id) != 2:
+            return
+        title = await generate_thread_title(question, answer)
+        if title:
+            await thread_db.update_thread_title(svc, thread_id, title)
+            turn_log.info("turn.titled", title=title)
+    except Exception:
+        turn_log.exception("turn.title_failed")
 
 
 async def run_chat_turn(
@@ -88,6 +114,8 @@ async def run_chat_turn(
         # log it so a dropped assistant message is debuggable, not silent.
         turn_log.exception("turn.persist_failed")
         return
+
+    await _title_first_turn(svc, thread_id, question, grounded.answer, turn_log)
 
     turn_log.info(
         "turn.completed",

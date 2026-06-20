@@ -17,7 +17,7 @@ Collected observations from manual testing. Each item includes the problem, desi
 
 ---
 
-## [ ] 2. "New Brief" Button Creates Duplicate Chats on Double-Click
+## [x] 2. "New Brief" Button Creates Duplicate Chats on Double-Click
 
 **Observation:** Clicking "New Brief" correctly opens a new chat. But clicking it a second time while already on a blank new chat opens another empty chat, resulting in duplicate blank sessions.
 
@@ -83,3 +83,18 @@ Collected observations from manual testing. Each item includes the problem, desi
 - Reuse the same markdown renderer chosen for item #1 (LLM output).
 - The citation panel likely has a narrower width — ensure the renderer handles constrained layouts gracefully (wrapping, no horizontal overflow).
 - If the source content is very long, consider a truncated preview with a "Show more" expand.
+
+---
+
+## [x] 7. Dynamic Chat Thread Naming via LLM
+
+**Observation:** Thread titles were just the first user message truncated to 60 characters — often chopped mid-word and not a real summary of the brief.
+
+**Desired behavior:** Generate a short, human-readable title (3–6 words, Title Case) from the opening exchange, so the sidebar is easy to scan.
+
+**Implementation:**
+- Backend-only, no new dependency or config — reuses `settings.gemini_chat_model` and the lazy async `genai.Client` pattern from `app/retrieval/embedding.py`.
+- `app/chat/titling.py` makes a one-shot Gemini call over the first question + the first ~2 lines of the answer, then sanitizes the output (strips quotes/punctuation, collapses whitespace, caps length).
+- Wired into `run_chat_turn` (`app/chat/orchestrator.py`) **after the first assistant turn is persisted**, gated to first-turn-only via `count_messages == 2`. Best-effort: any failure is logged (`turn.title_failed`) and the provisional title is kept.
+- The frontend needs no change — `streamChat` reads to EOF and the server holds the stream open until titling finishes, so the existing `refreshThreads()` after `send()` already shows the new title (no race, no polling).
+- The provisional sliced title from `ChatHome.tsx` stays as the instant placeholder until the LLM title lands.

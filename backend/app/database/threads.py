@@ -63,6 +63,27 @@ async def create_thread(
     return _parse_thread(result.data[0])
 
 
+async def update_thread_title(
+    client: AsyncClient, thread_id: uuid.UUID, title: str
+) -> None:
+    await (
+        client.table("chat_threads")
+        .update({"title": title})
+        .eq("id", str(thread_id))
+        .execute()
+    )
+
+
+async def count_messages(client: AsyncClient, thread_id: uuid.UUID) -> int:
+    result = (
+        await client.table("chat_messages")
+        .select("id", count="exact", head=True)
+        .eq("thread_id", str(thread_id))
+        .execute()
+    )
+    return result.count or 0
+
+
 async def get_thread(
     client: AsyncClient, thread_id: uuid.UUID
 ) -> ThreadRow | None:
