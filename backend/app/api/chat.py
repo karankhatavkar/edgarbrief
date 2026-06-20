@@ -6,7 +6,7 @@ POST /chat/stream — AI SDK data-stream of one assistant turn (stub in Phase 3)
 import uuid
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -17,6 +17,7 @@ from app.chat.streaming import DATA_STREAM_HEADERS
 from app.database import threads as thread_db
 from app.database.supabase import service_client
 from app.quota import QuotaExceeded, enforce_quota
+from app.quota.client_ip import client_ip
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -33,7 +34,7 @@ class StreamRequest(BaseModel):
 
 @router.post("/stream")
 async def chat_stream(
-    body: StreamRequest, client: UserClientDep, user: CurrentUserDep
+    body: StreamRequest, request: Request, client: UserClientDep, user: CurrentUserDep
 ) -> StreamingResponse:
     await require_owned_thread(client, body.thread_id)
     structlog.contextvars.bind_contextvars(thread_id=str(body.thread_id))
@@ -49,7 +50,7 @@ async def chat_stream(
     # user is out of budget or the month is full. The 429 detail carries a code +
     # message the frontend renders.
     try:
-        await enforce_quota(user.id, user.email)
+        await enforce_quota(user.id, user.email, client_ip(request))
     except QuotaExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

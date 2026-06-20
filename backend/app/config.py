@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     max_output_tokens: int = 1024  # cap on a single Gemini answer
     # Emails that bypass both limits (the owner, for testing). JSON list in env.
     demo_exempt_emails: list[str] = []
+    # Soft per-IP brake: distinct demo users one client IP may start per month.
+    # Generous on purpose — shared NAT/office IPs must not lock out real users;
+    # the global cap is the real wallet guarantee.
+    demo_ip_monthly_limit: int = 5
+    # Trust client-IP headers (CF-Connecting-IP / X-Forwarded-For) instead of the
+    # socket peer. ON in prod (Cloudflare Tunnel → uvicorn, so the peer is the
+    # tunnel); OFF in local dev, where the header is spoofable and the peer is real.
+    demo_trust_forwarded_for: bool = False
 
     # Logging
     log_level: str = "INFO"

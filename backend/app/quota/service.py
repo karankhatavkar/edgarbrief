@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import DemoUsage
+from app.database.models import DemoIpUsage, DemoUsage
 from app.database.session import async_session
 
 _USER_EXHAUSTED = (
@@ -35,6 +35,10 @@ _USER_EXHAUSTED = (
 _GLOBAL_EXHAUSTED = (
     "The demo is at capacity right now and temporarily unavailable. "
     "Please contact Karan at work.karankh@gmail.com."
+)
+_IP_EXHAUSTED = (
+    "This demo has already been tried several times from your network. "
+    "Reach out to Karan at work.karankh@gmail.com to see more."
 )
 
 
@@ -55,12 +59,17 @@ def _current_month() -> date:
     return date.today().replace(day=1)
 
 
-async def enforce_quota(user_id: uuid.UUID, email: str | None) -> None:
-    """Raise ``QuotaExceeded`` if the user is out of budget or the month is full.
+async def enforce_quota(
+    user_id: uuid.UUID, email: str | None, ip: str | None
+) -> None:
+    """Raise ``QuotaExceeded`` if the user is out of budget or a cap is full.
 
     For a user not yet active this month, claims their monthly demo slot up front
-    so a burst of new users can't overshoot the cap. Exempt emails bypass both
-    checks (the owner, for testing).
+    (and bumps the per-IP counter when ``ip`` is known) so a burst of new users —
+    or fresh anonymous identities minted from one machine — can't overshoot the
+    caps. A missing/unparseable ``ip`` skips only the IP brake (fail-open: never
+    block a real user because we couldn't read their IP). Exempt emails bypass
+    every check (the owner, for testing).
     """
     if email is not None and email in settings.demo_exempt_emails:
         return
@@ -81,7 +90,19 @@ async def enforce_quota(user_id: uuid.UUID, email: str | None) -> None:
             )
             if (active or 0) >= settings.demo_monthly_limit:
                 raise QuotaExceeded("global_quota_exhausted", _GLOBAL_EXHAUSTED)
+
+            if ip is not None:
+                ip_count = await session.scalar(
+                    select(DemoIpUsage.user_count).where(
+                        DemoIpUsage.ip == ip, DemoIpUsage.month == month
+                    )
+                )
+                if (ip_count or 0) >= settings.demo_ip_monthly_limit:
+                    raise QuotaExceeded("ip_quota_exhausted", _IP_EXHAUSTED)
+
             await _claim_month(session, user_id, month)
+            if ip is not None:
+                await _bump_ip(session, ip, month)
             await session.commit()
 
 
@@ -126,5 +147,20 @@ async def _claim_month(
         .on_conflict_do_update(
             index_elements=["user_id"],
             set_={"last_active_month": month, "updated_at": func.now()},
+        )
+    )
+
+
+async def _bump_ip(session: AsyncSession, ip: str, month: date) -> None:
+    """Count one more distinct demo user started from ``ip`` this month."""
+    await session.execute(
+        insert(DemoIpUsage)
+        .values(ip=ip, month=month, user_count=1)
+        .on_conflict_do_update(
+            index_elements=["ip", "month"],
+            set_={
+                "user_count": DemoIpUsage.user_count + 1,
+                "updated_at": func.now(),
+            },
         )
     )

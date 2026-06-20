@@ -37,8 +37,14 @@ export default function AuthPage() {
     setError(null)
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInAnonymously()
-      if (error) throw error
+      // Reuse an existing session instead of minting a fresh anonymous user on
+      // every click — a new anon user gets a brand-new id and a brand-new demo
+      // quota, so re-clicking "Try it out" would reset the trial.
+      const { data } = await supabase.auth.getSession()
+      if (!data.session) {
+        const { error } = await supabase.auth.signInAnonymously()
+        if (error) throw error
+      }
       navigate('/')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not start the demo.')

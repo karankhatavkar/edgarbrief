@@ -9,6 +9,7 @@ relationship resolution see the full schema. Import models from here, e.g.
 from app.database.models.base import Base, TimestampMixin, uuid_pk
 from app.database.models.chat_message import ChatMessage
 from app.database.models.chat_thread import ChatThread
+from app.database.models.demo_ip_usage import DemoIpUsage
 from app.database.models.demo_usage import DemoUsage
 from app.database.models.document_chunk import DocumentChunk
 from app.database.models.message_citation import MessageCitation
@@ -26,4 +27,5 @@ __all__ = [
     "ChatMessage",
     "MessageCitation",
     "DemoUsage",
+    "DemoIpUsage",
 ]
