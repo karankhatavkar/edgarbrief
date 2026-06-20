@@ -14,7 +14,10 @@ Deploy the app so anyone can use it at a public URL with:
 
 - **$0 hosting cost** — only the LLM (Gemini) costs money, and that is bounded.
 - **Low latency** for a demo.
-- **Per-user API limits** so one viewer cannot drain the Gemini budget.
+- **Frictionless "Try it out"** — login stays, but a viewer can use the app in one
+  click without signing up.
+- **Bounded spend by construction** — a global daily budget guarantees solvency
+  regardless of who the anonymous users are. See *Public demo* below.
 
 ## What actually needs hosting
 
@@ -168,8 +171,137 @@ Hosting is free; only Gemini costs money. Kept negligible by:
 2. **Embeddings are near-free here** — the corpus is embedded once at ingest, not
    per request; only the short user query is embedded at query time.
 3. **Hard per-user daily cap**, enforced in the backend *before* the Gemini call,
-   keyed on the Supabase user id (e.g. N messages/user/day). This is the real
-   safety valve: worst-case spend is bounded regardless of traffic.
+   keyed on the Supabase user id (e.g. N messages/user/day). This bounds a single
+   identity — but for anonymous demo users the real safety valve is the **global
+   daily cap** described next.
+
+---
+
+## Public demo: tiered access & cost control
+
+The demo must be open to anyone with **no forced login**, yet **must not be able
+to bankrupt the Gemini budget**, even though anonymous users cannot be reliably
+identified (IP rotates, VPNs and bots exist).
+
+### Core principle: separate *fairness* from *solvency*
+
+Two jobs that are usually conflated, deliberately kept apart:
+
+| Job | What it does | How strong it must be |
+| --- | --- | --- |
+| **Fairness** (per-identity quota) | Stops one viewer hogging the demo | **Best-effort.** Allowed to be leaky — it does not protect the wallet. |
+| **Solvency** (global daily cap) | Guarantees total spend never exceeds a ceiling | **Airtight.** Does not depend on identifying anyone. |
+
+The financial guarantee rests **only** on the global cap. Anonymous identity is
+treated as unreliable on purpose, so the system never depends on it for safety.
+An abuser who defeats every per-identity limit still cannot get past the global
+cap — worst case, the demo pauses ("back tomorrow") having spent a bounded amount.
+
+### Why this is safe by construction (the cost math)
+
+A demo turn is almost free, which is what makes a low global cap sufficient:
+
+- **Gemini Flash-Lite** + `max_output_tokens` cap (~500) + a few-K-token RAG
+  context ≈ a tiny fraction of a cent per turn.
+- **Semantic cache** (free — reuses the existing pgvector + embedder) returns
+  repeated questions at $0 and millisecond latency.
+
+So even thousands of abusive turns cost single-digit dollars. A **global daily
+cap of ~$1–2** makes the worst realistic outcome "the demo paused for the day,"
+not a large bill. The defense protects against a $5 surprise, not a $5,000 one.
+
+### Identity: one-click anonymous, no friction
+
+The **"Try it out"** button uses **Supabase Anonymous Auth**:
+
+- One click → silent anonymous sign-in → a real `user.id` + JWT, **zero typing**.
+- **Reuses the existing JWT verification path** — quota code keys on `user.id`
+  for anonymous and logged-in users alike; no forked auth logic.
+- More stable than IP: the id lives in the browser, so it **survives IP changes
+  and VPNs** (unlike IP-based identification).
+
+**Known and accepted leak:** the anonymous id lives in browser storage, so
+clearing storage / incognito / another browser yields a **new id and a fresh
+quota**. This is expected — per-identity quota is fairness, not solvency, and the
+global cap bounds the damage regardless.
+
+### Tiered quotas turn the limit into a login funnel
+
+| Tier | Entry | Quota | Rationale |
+| --- | --- | --- | --- |
+| **Anonymous** ("Try it out") | One click → silent anon auth | Small (e.g. 5–8 turns) | Untrusted, easy-to-farm identity → keep cheap |
+| **Logged in** ("Sign in for more") | Full Supabase Auth (email/OAuth) | Larger | Email = accountable, hard-to-farm → safe to be generous |
+| **Exhausted** | — | — | 429 → "Sign in to keep exploring" + optional **BYOK** |
+
+Hitting the anonymous limit is a **conversion nudge**, not a dead end. Logged-in
+users can be given a larger budget *because* email is the one identity that is
+genuinely expensive to farm.
+
+### Bot protection is an optional dial (Turnstile), not a requirement
+
+Because solvency is guaranteed by the global cap, bot mitigation only affects
+**availability** (keeping the demo up for real users during a farming attempt),
+never solvency. Start without it; enable it if abuse is observed:
+
+| Setting | Friction for real humans | Farming difficulty | Wallet safety |
+| --- | --- | --- | --- |
+| **No Turnstile, global cap only** *(recommended start)* | Zero — instant | Easy | Safe (cap holds) |
+| **Cloudflare Turnstile (managed/invisible)** | Near-zero (silent for humans) | Bots challenged | Safe + farming tedious |
+| **Turnstile (interactive)** | One checkbox | Hard | Safe + annoying to farm |
+
+Cloudflare Turnstile in managed mode is **invisible for almost all real users**
+(no puzzle); only bot-like clients are challenged. Supabase can attach Turnstile
+to its sign-in endpoint, so each *new* anonymous identity costs a (usually
+invisible) check — making cache-clearing loops tedious without taxing genuine
+visitors. Turnstile is a script tag + config, addable later without rearchitecture.
+
+### Cost reducers that double as implicit limits
+
+- **Gemini Flash-Lite** as the generation model.
+- **`max_output_tokens`** cap + concise system prompt + rolling conversation
+  summary (prevents input cost compounding across turns).
+- **Semantic cache** in the existing pgvector store: embed the incoming query,
+  return a cached answer when cosine similarity is very high (≈0.97). Cache hits
+  cost $0 and skip the LLM entirely.
+
+### Demo request pipeline
+
+```mermaid
+flowchart TD
+    start([Try it out]) -->|optional, if enabled| turnstile{Turnstile<br/>invisible check}
+    turnstile -->|pass| anon[Silent Supabase<br/>anonymous sign-in → JWT]
+    turnstile -.->|bot| block[Challenge / block]
+    anon --> turn[Chat turn]
+
+    turn --> global{Global daily<br/>cap reached?}
+    global -->|yes| paused[Demo paused —<br/>back tomorrow]
+    global -->|no| quota{Per-identity<br/>quota left?}
+
+    quota -->|no| upsell[429 → Sign in for more<br/>· optional BYOK]
+    quota -->|yes| cache{Semantic cache<br/>hit ≈0.97?}
+
+    cache -->|yes| cached[Return cached answer<br/>$0 · ms latency]
+    cache -->|no| gemini[Gemini Flash-Lite<br/>max_output_tokens cap]
+    gemini --> record[Record exact usage →<br/>per-identity + global counters]
+```
+
+### Where each control lives
+
+- **Global cap, per-identity quota, semantic cache** — enforced **in FastAPI**
+  before/around the Gemini call (no edge compute in this stack). Counters stored
+  in **Postgres** via atomic upsert (reuses Supabase; no Redis/Upstash needed —
+  the persistent process and low demo traffic don't require them).
+- **Anonymous identity** — Supabase Anonymous Auth (frontend) + existing backend
+  JWT verification.
+- **Turnstile** (if enabled) — Cloudflare edge + Supabase sign-in CAPTCHA hook.
+
+### Residual risk (accepted)
+
+A determined attacker can still pass Turnstile repeatedly, rotate anonymous
+identities, and consume the **global daily budget** — making the demo briefly
+unavailable to others until reset. This is a **denial of availability, not a
+financial loss**, and is an acceptable failure mode for a portfolio demo. The
+global cap is a single config value that can be raised or lowered as needed.
 
 ---
 
