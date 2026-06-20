@@ -32,6 +32,21 @@ export default function AuthPage() {
     setSuccess(false)
   }
 
+  async function handleTryItOut() {
+    if (loading) return
+    setError(null)
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.signInAnonymously()
+      if (error) throw error
+      navigate('/')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not start the demo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (loading) return
@@ -86,7 +101,24 @@ export default function AuthPage() {
               </Button>
             </div>
           ) : (
-            <Tabs value={mode} onValueChange={switchMode} className="gap-6">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                <Button
+                  type="button"
+                  onClick={handleTryItOut}
+                  disabled={loading}
+                  className="w-full"
+                >
+                  ✨ Try it out — no signup
+                </Button>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or sign in for more
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              </div>
+
+              <Tabs value={mode} onValueChange={switchMode} className="gap-6">
               <TabsList className="w-full">
                 <TabsTrigger value="signin">Sign in</TabsTrigger>
                 <TabsTrigger value="signup">Create account</TabsTrigger>
@@ -131,7 +163,8 @@ export default function AuthPage() {
                       : 'Create account'}
                 </Button>
               </form>
-            </Tabs>
+              </Tabs>
+            </div>
           )}
         </CardContent>
       </Card>

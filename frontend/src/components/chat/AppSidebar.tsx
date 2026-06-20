@@ -124,10 +124,10 @@ export function AppSidebar({ threads, loading, createThread, email, onClose }: A
       <div className="mt-auto border-t px-3 py-3">
         <div className="mb-2 flex items-center gap-2">
           <div className="flex size-7 items-center justify-center rounded-full bg-muted font-mono text-[11px] uppercase text-muted-foreground">
-            {(email ?? "?").slice(0, 1)}
+            {(email ?? "Guest").slice(0, 1)}
           </div>
           <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-            {email ?? "Signed in"}
+            {email ?? "Guest"}
           </span>
         </div>
         <Button
