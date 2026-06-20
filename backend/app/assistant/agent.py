@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
 
 from app.assistant.deps import DocumentAgentDeps
@@ -26,6 +26,8 @@ _INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text(encoding="
 _model = GoogleModel(
     settings.gemini_chat_model,
     provider=GoogleProvider(api_key=settings.gemini_api_key),
+    # Cap a single answer's output to bound per-turn Gemini cost on the demo.
+    settings=GoogleModelSettings(max_tokens=settings.max_output_tokens),
 )
 
 agent = Agent(

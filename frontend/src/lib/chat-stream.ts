@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
-import type { ApiError } from "@/lib/http";
+import { toApiError, type ApiError } from "@/lib/http";
 import type { SourcePassage } from "@/lib/citations";
 
 export interface StreamMessage {
@@ -62,7 +62,7 @@ export async function streamChat({
   }
 
   if (!response.ok || !response.body) {
-    throw await httpError(response);
+    throw await toApiError(response);
   }
 
   const reader = response.body.getReader();
@@ -117,15 +117,4 @@ function handleFrame(
 
 function networkError(): ApiError {
   return { status: 0, message: "Network error", isNetworkError: true };
-}
-
-async function httpError(response: Response): Promise<ApiError> {
-  let message = response.statusText;
-  try {
-    const json = await response.json();
-    message = json?.detail ?? json?.message ?? message;
-  } catch {
-    // leave message as statusText
-  }
-  return { status: response.status, message, isNetworkError: false };
 }

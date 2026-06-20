@@ -27,6 +27,7 @@ from app.chat.streaming import (
 from app.chat.titling import generate_thread_title
 from app.database import threads as thread_db
 from app.database.session import async_session
+from app.quota import record_usage
 
 log = structlog.get_logger(__name__)
 
@@ -57,12 +58,13 @@ async def _title_first_turn(
 
 
 async def run_chat_turn(
-    svc: AsyncClient, thread_id: uuid.UUID, question: str
+    svc: AsyncClient, thread_id: uuid.UUID, question: str, user_id: uuid.UUID
 ) -> AsyncGenerator[str, None]:
     """Yield AI SDK data-stream lines for one assistant turn, then persist it.
 
     The user message is persisted by the route before this runs; this persists
-    the assistant message and its citations after the stream completes.
+    the assistant message and its citations after the stream completes, and
+    records the turn's token usage against the caller's demo budget.
     """
     turn_log = log.bind(thread_id=str(thread_id))
     turn_log.info("turn.started")
@@ -86,6 +88,12 @@ async def run_chat_turn(
         yield finish_frame()
         return
 
+    # Bill the whole turn once — `result.usage` already sums every internal step
+    # (retries + tool calls). Done before streaming so a client disconnect can't
+    # drop the charge.
+    usage = result.usage
+    await record_usage(user_id, usage.total_tokens, usage.requests)
+
     grounded = build_grounded_answer(result.output, deps.retrieved)
 
     for token in answer_deltas(grounded.answer):
@@ -94,7 +102,7 @@ async def run_chat_turn(
         yield citations_part(
             [passage.model_dump(mode="json") for passage in grounded.cited_passages]
         )
-    yield finish_frame()
+    yield finish_frame(usage.input_tokens, usage.output_tokens)
 
     passage_index = {p.chunk_id: p.passage_index for p in grounded.cited_passages}
     citation_rows = [

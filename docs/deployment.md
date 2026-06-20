@@ -1,10 +1,28 @@
 # Deployment Architecture — Single Container (Option A)
 
-Status: **proposed** · Scope: **architecture only** (no implementation in this doc)
+Status: **Phase A live** · **Phase B implemented** · Phase C planned. Includes the
+as-built operations runbook (bottom).
 
 This describes how EdgarBrief is deployed for free, low-latency demo access so
 potential clients and portfolio viewers can try it. It documents the chosen
 **single-container** design and the reasoning behind it.
+
+---
+
+## Implementation status
+
+- ✅ **Phase A — Live.** Single container (FastAPI serves the SPA + API), `/api`
+  routing, two-stage Dockerfile, push-to-deploy via self-hosted runner, warm DB
+  pool, Cloudflare Tunnel on `edgarbrief.karankh.tech`, Supabase migrated to
+  **Mumbai (`ap-south-1`)** (measured warm query ~27 ms). See *Operations runbook*.
+- ✅ **Phase B — Implemented** (branch `feat/cost-controls`; ships on merge to
+  `deploy/single-container`). **Per-user lifetime token cap** + **global monthly
+  demo cap** (N distinct users/month, auto-resets) + **`max_output_tokens`** cap,
+  all `.env`-configurable. Keyed on the logged-in `user.id` — **login is still
+  required**.
+- ⏳ **Phase C — Not built.** The *Public demo* section below is the **target**
+  design: anonymous one-click "Try it out", tiered anon-vs-logged-in quotas,
+  Cloudflare Turnstile, semantic cache, BYOK. Marked inline as ⏳ where relevant.
 
 ---
 
@@ -145,21 +163,18 @@ sequenceDiagram
 
 ---
 
-## Single-origin routing convention
+## Single-origin routing convention ✅ implemented
 
 Because one process serves both the UI and the API, paths must not collide. The
-intended convention (to be applied during implementation):
+convention now in place:
 
-- **All API routers mounted under a single `/api` prefix** — e.g.
-  `/api/chat/stream`, `/api/threads`, `/api/auth/*`, `/api/health`.
-  (Today the routers sit at the root: `/chat`, `/threads`, `/health`, auth.)
-- **SPA fallback** — any non-`/api` path returns `index.html` so client-side
-  routing (React Router) works on deep links / refresh.
-- **Frontend `VITE_API_BASE_URL` becomes relative** (`/api`) instead of an
-  absolute backend URL — this is what removes CORS.
-
-This section records the *target* contract; the route-prefix change and static
-mount are implementation work, not part of this document.
+- ✅ **All API routers mounted under a single `/api` prefix** — `/api/chat/stream`,
+  `/api/threads`, `/api/health`, auth (`backend/app/main.py`).
+- ✅ **SPA fallback** — any non-`/api` path returns `index.html` (catch-all in
+  `main.py`, active when `FRONTEND_DIST` is set) so React Router deep links /
+  refresh work.
+- ✅ **Frontend `VITE_API_BASE_URL` is relative** (`/api`); a Vite dev proxy
+  forwards `/api` to the backend in dev. Same-origin in prod removes CORS.
 
 ---
 
@@ -167,17 +182,25 @@ mount are implementation work, not part of this document.
 
 Hosting is free; only Gemini costs money. Kept negligible by:
 
-1. **Cheapest capable model** for generation (Gemini Flash / Flash-Lite tier).
-2. **Embeddings are near-free here** — the corpus is embedded once at ingest, not
+1. ✅ **Cheapest capable model** for generation (live model `gemini-3.1-flash-lite`).
+2. ✅ **Embeddings are near-free here** — the corpus is embedded once at ingest, not
    per request; only the short user query is embedded at query time.
-3. **Hard per-user daily cap**, enforced in the backend *before* the Gemini call,
-   keyed on the Supabase user id (e.g. N messages/user/day). This bounds a single
-   identity — but for anonymous demo users the real safety valve is the **global
-   daily cap** described next.
+3. ✅ **`max_output_tokens` cap** on the model (`MAX_OUTPUT_TOKENS`).
+4. ✅ **Per-user + global caps** enforced in the backend *before* the Gemini call
+   (`app/quota`, keyed on `user.id`). As shipped (Phase B): a **per-user lifetime
+   token budget** (never resets) plus a **global cap of N distinct demo users per
+   calendar month** (auto-resets) — the latter is the bankruptcy stop. See the
+   *Public demo* section for the broader target design.
 
 ---
 
 ## Public demo: tiered access & cost control
+
+> **Status:** this section is the **target** design. **Shipped today (Phase B):**
+> per-user lifetime token cap + global monthly demo cap + `max_output_tokens`,
+> keyed on the logged-in `user.id` — **login is still required**. **Not yet built
+> (Phase C):** anonymous "Try it out", tiered anon-vs-logged-in quotas, Turnstile,
+> semantic cache, BYOK. Items below are tagged ✅ (shipped) / ⏳ (planned).
 
 The demo must be open to anyone with **no forced login**, yet **must not be able
 to bankrupt the Gemini budget**, even though anonymous users cannot be reliably
@@ -210,7 +233,7 @@ So even thousands of abusive turns cost single-digit dollars. A **global daily
 cap of ~$1–2** makes the worst realistic outcome "the demo paused for the day,"
 not a large bill. The defense protects against a $5 surprise, not a $5,000 one.
 
-### Identity: one-click anonymous, no friction
+### Identity: one-click anonymous, no friction ⏳ (Phase C — not built)
 
 The **"Try it out"** button uses **Supabase Anonymous Auth**:
 
@@ -225,7 +248,7 @@ clearing storage / incognito / another browser yields a **new id and a fresh
 quota**. This is expected — per-identity quota is fairness, not solvency, and the
 global cap bounds the damage regardless.
 
-### Tiered quotas turn the limit into a login funnel
+### Tiered quotas turn the limit into a login funnel ⏳ (Phase C — not built)
 
 | Tier | Entry | Quota | Rationale |
 | --- | --- | --- | --- |
@@ -237,7 +260,7 @@ Hitting the anonymous limit is a **conversion nudge**, not a dead end. Logged-in
 users can be given a larger budget *because* email is the one identity that is
 genuinely expensive to farm.
 
-### Bot protection is an optional dial (Turnstile), not a requirement
+### Bot protection is an optional dial (Turnstile), not a requirement ⏳ (Phase C — not built)
 
 Because solvency is guaranteed by the global cap, bot mitigation only affects
 **availability** (keeping the demo up for real users during a farming attempt),
@@ -257,12 +280,11 @@ visitors. Turnstile is a script tag + config, addable later without rearchitectu
 
 ### Cost reducers that double as implicit limits
 
-- **Gemini Flash-Lite** as the generation model.
-- **`max_output_tokens`** cap + concise system prompt + rolling conversation
-  summary (prevents input cost compounding across turns).
-- **Semantic cache** in the existing pgvector store: embed the incoming query,
+- ✅ **Gemini Flash-Lite** as the generation model.
+- ✅ **`max_output_tokens`** cap (concise prompt; rolling-summary is future work).
+- ⏳ **Semantic cache** in the existing pgvector store: embed the incoming query,
   return a cached answer when cosine similarity is very high (≈0.97). Cache hits
-  cost $0 and skip the LLM entirely.
+  cost $0 and skip the LLM entirely. **Not built — explicitly out of scope for now.**
 
 ### Demo request pipeline
 
@@ -287,13 +309,12 @@ flowchart TD
 
 ### Where each control lives
 
-- **Global cap, per-identity quota, semantic cache** — enforced **in FastAPI**
-  before/around the Gemini call (no edge compute in this stack). Counters stored
-  in **Postgres** via atomic upsert (reuses Supabase; no Redis/Upstash needed —
-  the persistent process and low demo traffic don't require them).
-- **Anonymous identity** — Supabase Anonymous Auth (frontend) + existing backend
+- ✅ **Per-user + global caps** — enforced **in FastAPI** before the Gemini call
+  (`app/quota/service.py`), counters in **Postgres** via atomic upsert (`demo_usage`
+  table; no Redis/Upstash needed). **Semantic cache** ⏳ not built.
+- ⏳ **Anonymous identity** — Supabase Anonymous Auth (frontend) + existing backend
   JWT verification.
-- **Turnstile** (if enabled) — Cloudflare edge + Supabase sign-in CAPTCHA hook.
+- ⏳ **Turnstile** (if enabled) — Cloudflare edge + Supabase sign-in CAPTCHA hook.
 
 ### Residual risk (accepted)
 
@@ -311,9 +332,8 @@ global cap is a single config value that can be raised or lowered as needed.
   cannot improve that.
 - The location-sensitive cost is the **backend ↔ Supabase round-trips** during
   hybrid retrieval. Keep the container and the Supabase **region** close.
-  - Supabase near the laptop (e.g. Mumbai/Singapore) → self-hosting is ideal.
-  - Supabase far away → consider moving the Supabase region, or relocating the
-    container to a host near Supabase.
+  - ✅ **Done:** Supabase project migrated from Sydney to **Mumbai (`ap-south-1`)** —
+    measured warm `SELECT 1` dropped ~157 ms → **~27 ms** (~6× on per-turn DB time).
 - Cloudflare edge-caches the static assets by header, so first-paint stays fast
   globally even though the origin is a home laptop.
 
@@ -322,8 +342,9 @@ global cap is a single config value that can be raised or lowered as needed.
 ## Operational dependencies
 
 - The laptop must stay on (this is the reliability trade-off accepted for $0).
-- The Cloudflare Tunnel adds a hostname route to the container's local port.
-- Supabase Auth **redirect/allowed URLs** must include the public domain.
+- ✅ The Cloudflare Tunnel routes `edgarbrief.karankh.tech` → `host.docker.internal:8000`.
+- ⚠️ Supabase Auth **redirect/allowed URLs** must include `https://edgarbrief.karankh.tech`
+  (set in Authentication → URL Configuration), or email login redirects break.
 
 ---
 
@@ -334,3 +355,50 @@ containers — a static web server (Caddy preferred over nginx, for default
 non-buffered streaming) reverse-proxying `/api` to a separate backend container —
 or split hosts entirely (frontend → Cloudflare Pages, backend → Railway/Fly near
 Supabase). The `/api` prefix convention above makes that split a drop-in change.
+
+---
+
+## Operations runbook (as built)
+
+How the live deploy is actually wired, including the macOS gotchas we hit.
+
+### Push-to-deploy
+- A **GitHub Actions self-hosted runner** runs on the server (`runs-on: self-hosted`,
+  installed as a launchd service via the runner's `./svc.sh install && ./svc.sh start`).
+- `.github/workflows/deploy.yml` triggers on push to `deploy/single-container`:
+  restore env files → `docker compose --env-file frontend/.env build` →
+  `alembic upgrade head` → `docker compose up -d` → prune.
+- The runner polls GitHub outbound, so no inbound port is exposed for CI.
+
+### Secrets on the server (never in git)
+Kept in `~/edgarbrief/secrets/` and copied into the workspace by the workflow:
+- `backend.env` → `backend/.env` (runtime secrets, incl. the Phase B demo limits).
+- `frontend.env` → `frontend/.env` (public build values).
+Override the location with `SECRETS_DIR` on the runner.
+
+### Cloudflare Tunnel
+- Reuses the existing `cloudflared` container (shared with n8n). Added a public
+  hostname `edgarbrief.karankh.tech` → service **`http://host.docker.internal:8000`**
+  (cloudflared is on a different Docker network, so it reaches the published host
+  port, not a compose service name).
+
+### Supabase
+- After pointing the domain, set **Authentication → URL Configuration**:
+  Site URL `https://edgarbrief.karankh.tech` + redirect URLs (`…/**`), or email
+  login redirects break.
+
+### macOS-specific gotchas (already fixed, documented so they're not re-hit)
+- **Docker keychain:** the launchd-run runner can't reach the login keychain, so
+  Docker's credential helper failed on image pulls. Fix: remove `credsStore` from
+  `~/.docker/config.json` (only public images are pulled, so no creds are needed).
+- **ghcr 403:** anonymous pulls of `ghcr.io/astral-sh/uv` failed from the runner;
+  the Dockerfile installs `uv` from **PyPI** instead, keeping the build to Docker
+  Hub + PyPI.
+- **Runner architecture:** the server is Apple Silicon — use the **arm64** runner
+  package, not x64.
+
+### Test the container locally before wiring CI
+```
+docker compose --env-file frontend/.env build && docker compose up -d
+# open http://<host>:8000  → SPA loads, /api/health → {"status":"ok"}
+```

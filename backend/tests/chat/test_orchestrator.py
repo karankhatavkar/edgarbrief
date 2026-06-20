@@ -30,8 +30,12 @@ def _stub_turn_io(monkeypatch, chunk):
     async def fake_retrieve(session, query, **kwargs):
         return [SimpleNamespace(chunk=chunk, neighbors=[], score=1.0)]
 
+    async def fake_record_usage(user_id, tokens, requests):
+        return None
+
     monkeypatch.setattr(agent_mod, "retrieve", fake_retrieve)
     monkeypatch.setattr(orchestrator, "async_session", lambda: _FakeSessionCtx())
+    monkeypatch.setattr(orchestrator, "record_usage", fake_record_usage)
 
 
 def _drain(gen):
@@ -66,7 +70,7 @@ def test_run_chat_turn_streams_and_persists(monkeypatch, make_chunk):
     monkeypatch.setattr(orchestrator.thread_db, "save_assistant_message", fake_save)
 
     with agent.override(model=_model(chunk.id)):
-        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     assert any(line.startswith("0:") for line in lines)  # text deltas
     assert any(line.startswith("8:") for line in lines)  # citations part
@@ -101,7 +105,7 @@ def test_run_chat_turn_titles_first_turn(monkeypatch, make_chunk):
     monkeypatch.setattr(orchestrator, "generate_thread_title", fake_generate)
 
     with agent.override(model=_model(chunk.id)):
-        _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+        _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     assert titled["title"] == "Apple Revenue Title"
 
@@ -131,7 +135,7 @@ def test_run_chat_turn_skips_title_on_later_turns(monkeypatch, make_chunk):
     monkeypatch.setattr(orchestrator, "generate_thread_title", fake_generate)
 
     with agent.override(model=_model(chunk.id)):
-        _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+        _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     assert called == {"generate": False, "update": False}
 
@@ -155,7 +159,7 @@ def test_run_chat_turn_title_failure_is_swallowed(monkeypatch, make_chunk):
 
     with capture_logs() as logs:
         with agent.override(model=_model(chunk.id)):
-            lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+            lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     # The turn still completes cleanly; the title failure is logged, not raised.
     assert lines[-1].startswith("d:")
@@ -178,7 +182,7 @@ def test_run_chat_turn_grounding_failure_emits_error_and_skips_persist(
 
     # Output cites a chunk that was never retrieved -> turn fails closed.
     with agent.override(model=_model(uuid.uuid4())):
-        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     assert any(line.startswith("3:") for line in lines)  # error part
     assert lines[-1].startswith("d:")
@@ -199,7 +203,7 @@ def test_run_chat_turn_unexpected_failure_degrades_and_logs(monkeypatch):
     monkeypatch.setattr(orchestrator.thread_db, "save_assistant_message", fake_save)
 
     with capture_logs() as logs:
-        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q"))
+        lines = _drain(run_chat_turn(SimpleNamespace(), uuid.uuid4(), "q", uuid.uuid4()))
 
     assert any(line.startswith("3:") for line in lines)  # graceful error part
     assert lines[-1].startswith("d:")  # finish frame, not a raised exception

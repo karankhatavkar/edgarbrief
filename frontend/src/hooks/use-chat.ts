@@ -123,9 +123,10 @@ export function useChat(threadId: string): UseChat {
           return;
         }
         // Drop the empty assistant bubble; the user's question stays so `retry`
-        // can re-run the turn against it.
+        // can re-run the turn against it. A 429 (demo quota) isn't retryable —
+        // re-sending won't help, so don't offer a retry.
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setRetryable(true);
+        setRetryable(!(isApiError(err) && err.status === 429));
         setError(messageForError(err));
         setStatus("error");
         if (isApiError(err) && err.status === 401) void supabase.auth.signOut();

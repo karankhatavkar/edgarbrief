@@ -2,6 +2,8 @@ export interface ApiError {
   status: number;
   message: string;
   isNetworkError: boolean;
+  /** Machine-readable reason from the backend (e.g. quota codes on a 429). */
+  code?: string;
 }
 
 export function isApiError(err: unknown): err is ApiError {
@@ -33,17 +35,34 @@ export async function request<T>(
   }
 
   if (!response.ok) {
-    let message = response.statusText;
-    try {
-      const json = await response.json();
-      message = json?.detail ?? json?.message ?? message;
-    } catch {
-      // leave message as statusText
-    }
-    const err: ApiError = { status: response.status, message, isNetworkError: false };
-    throw err;
+    throw await toApiError(response);
   }
 
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/**
+ * Build an {@link ApiError} from a non-OK response.
+ *
+ * Reads FastAPI's `detail`, which is either a string or — for richer errors like
+ * quota 429s — an object `{ code, message }`. The `code` lets callers branch on
+ * the reason (e.g. user vs. global quota) without string-matching the message.
+ */
+export async function toApiError(response: Response): Promise<ApiError> {
+  let message = response.statusText;
+  let code: string | undefined;
+  try {
+    const json = await response.json();
+    const detail = json?.detail;
+    if (detail && typeof detail === "object") {
+      message = detail.message ?? message;
+      code = detail.code;
+    } else {
+      message = detail ?? json?.message ?? message;
+    }
+  } catch {
+    // non-JSON body — keep statusText
+  }
+  return { status: response.status, message, isNetworkError: false, code };
 }

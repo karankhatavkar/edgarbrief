@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     # where the Vite dev server serves the frontend instead.
     frontend_dist: Path | None = None
 
+    # Demo cost controls (Phase B). Keep Gemini spend bounded on the public demo.
+    # Per-user budget is a *lifetime* token total (never resets); the global cap
+    # is a count of distinct demo users active per calendar month (auto-resets).
+    demo_user_token_limit: int = 150_000  # ~₹5 at a conservative flash-lite rate
+    demo_monthly_limit: int = 20  # distinct demo users allowed per month
+    max_output_tokens: int = 1024  # cap on a single Gemini answer
+    # Emails that bypass both limits (the owner, for testing). JSON list in env.
+    demo_exempt_emails: list[str] = []
+
     # Logging
     log_level: str = "INFO"
     log_json: bool = False  # set True in prod for machine-parseable logs
