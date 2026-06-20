@@ -1,0 +1,30 @@
+# Secrets never go into the image — runtime config comes from env_file (compose).
+**/.env
+**/.env.*
+
+# Build caches / artifacts (rebuilt inside the image)
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/node_modules/
+frontend/dist/
+**/*.tsbuildinfo
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Repo metadata + things the image doesn't need
+.git/
+.github/
+.vscode/
+.idea/
+docs/
+**/.DS_Store
+
+# Large local corpus (never baked into the image)
+data/downloads/
+data/markdown/
+*.parquet
+*.log

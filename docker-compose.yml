@@ -1,0 +1,43 @@
+# Single-container deploy. One uvicorn process serves the API (/api) and the
+# built SPA.
+#
+# Two existing env files, no third — and no secrets in the image:
+#   - build args (PUBLIC VITE_* values)    <- frontend/.env, passed with
+#         docker compose --env-file frontend/.env build
+#   - runtime secrets (DB/Supabase/Gemini) <- backend/.env, injected at run time
+#         via env_file below (never copied into any image layer)
+#
+# Build + run:
+#   docker compose --env-file frontend/.env build
+#   docker compose up -d
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Public only. Build args are visible in image history, so real secrets
+        # (service-role key, DB URL, Gemini key) are NEVER passed here.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    image: edgarbrief:latest
+    restart: unless-stopped
+    env_file:
+      # Read on the host at container start; values become env vars in the
+      # running container, not image layers.
+      - ./backend/.env
+    environment:
+      # Path inside the image where the built SPA lives (see Dockerfile).
+      FRONTEND_DIST: /app/frontend_dist
+    ports:
+      # Exposed to the host so the Cloudflare Tunnel (running on the host) can
+      # reach it at localhost:8000.
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

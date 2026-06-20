@@ -11,4 +11,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Dev only: the app calls a relative /api so the same VITE_API_BASE_URL=/api
+  // works in dev and in the single-container prod build. Under `pnpm dev` the
+  // Vite server (:5173) forwards /api to the local FastAPI backend (:8000).
+  // Not used in production, where FastAPI serves the build and /api is same-origin.
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
+  },
 })

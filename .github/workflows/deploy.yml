@@ -1,0 +1,43 @@
+name: deploy
+
+# Push to this branch -> the self-hosted runner on the laptop rebuilds and
+# restarts the container. The runner polls GitHub outbound, so no inbound port
+# is exposed.
+on:
+  push:
+    branches: [deploy/single-container]
+
+# Never run two deploys at once; a newer push supersedes an in-flight one.
+concurrency:
+  group: deploy-single-container
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      # checkout cleans the workspace, so the gitignored .env files aren't here.
+      # Restore them from a persistent dir on the laptop (secrets never touch
+      # git or GitHub). Override the location by setting SECRETS_DIR on the runner.
+      #   $SECRETS_DIR/backend.env  -> backend/.env   (runtime secrets)
+      #   $SECRETS_DIR/frontend.env -> frontend/.env  (public build values)
+      - name: Provision env files
+        run: |
+          set -euo pipefail
+          SECRETS_DIR="${SECRETS_DIR:-$HOME/edgarbrief/secrets}"
+          cp "$SECRETS_DIR/backend.env" backend/.env
+          cp "$SECRETS_DIR/frontend.env" frontend/.env
+
+      - name: Build image
+        run: docker compose --env-file frontend/.env build
+
+      - name: Run database migrations
+        run: docker compose run --rm app uv run alembic upgrade head
+
+      - name: Start / update the container
+        run: docker compose up -d
+
+      - name: Prune dangling images
+        run: docker image prune -f

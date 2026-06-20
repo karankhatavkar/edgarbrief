@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # Server — JSON-encoded list in env: '["https://app.example.com","http://localhost:5173"]'
     allowed_origins: list[str] = ["http://localhost:5173"]
 
+    # Built React SPA served by FastAPI from the same origin (single-container
+    # deploy). Set to the dist path in the container; left unset in local dev,
+    # where the Vite dev server serves the frontend instead.
+    frontend_dist: Path | None = None
+
     # Logging
     log_level: str = "INFO"
     log_json: bool = False  # set True in prod for machine-parseable logs
