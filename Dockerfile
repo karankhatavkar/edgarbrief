@@ -27,7 +27,11 @@ RUN pnpm build   # -> /web/dist
 
 # ---- Stage 2: Python runtime serving API + the built SPA ----
 FROM python:3.12-slim AS runtime
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Install uv from PyPI rather than pulling ghcr.io/astral-sh/uv. The self-hosted
+# runner's Docker can't reliably pull from ghcr (anonymous 403), and PyPI is the
+# one source we already depend on — so this keeps the build to a single registry.
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
