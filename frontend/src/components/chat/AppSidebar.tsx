@@ -27,6 +27,22 @@ export function AppSidebar({ threads, loading, createThread, email, onClose }: A
   const navigate = useNavigate();
   const location = useLocation();
   const [creating, setCreating] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      // `local` scope clears this device's session without the global
+      // token-revocation round-trip, which can stall on a flaky network and
+      // leave the user silently signed in. See onAuthStateChange in lib/auth.
+      await supabase.auth.signOut({ scope: "local" });
+    } finally {
+      // Leave regardless of the result — the user asked to sign out, so don't
+      // strand them on an authed screen if the server call hiccuped.
+      navigate("/auth", { replace: true });
+    }
+  }
 
   async function newBrief() {
     if (creating) return;
@@ -133,11 +149,12 @@ export function AppSidebar({ threads, loading, createThread, email, onClose }: A
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => supabase.auth.signOut()}
+          onClick={logout}
+          disabled={loggingOut}
           className="w-full justify-start gap-2 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
         >
           <Icon icon={Logout03Icon} size={15} />
-          Log out
+          {loggingOut ? "Signing out…" : "Log out"}
         </Button>
       </div>
     </div>
