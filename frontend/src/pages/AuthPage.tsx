@@ -45,7 +45,7 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signInAnonymously()
         if (error) throw error
       }
-      navigate('/')
+      navigate('/app')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not start the demo.')
     } finally {
@@ -63,7 +63,7 @@ export default function AuthPage() {
       if (mode === 'signin') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        navigate('/')
+        navigate('/app')
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
@@ -71,7 +71,7 @@ export default function AuthPage() {
         // we drop the user straight into the app. Otherwise prompt them to
         // confirm via the emailed link.
         if (data.session) {
-          navigate('/')
+          navigate('/app')
         } else {
           setSuccess(true)
         }
@@ -84,7 +84,7 @@ export default function AuthPage() {
   }
 
   if (!sessionLoading && session) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/app" replace />
   }
 
   return (
